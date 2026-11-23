@@ -159,32 +159,48 @@ canvas#stage{position:fixed;inset:0;width:100%;height:100%;display:block;backgro
 .spacer{flex:1}
 
 /* ---------- main menu ---------- */
-.screen--menu{
-  background:linear-gradient(90deg,rgba(5,7,4,.86) 0%,rgba(5,7,4,.62) 38%,rgba(5,7,4,.12) 70%,rgba(5,7,4,.4) 100%);
-  justify-content:space-between;backdrop-filter:none;
+/* ================= MAIN MENU — CINEMATIC COMMAND CENTER ================= */
+.screen--menu{padding:0;overflow:hidden}
+.mm-hero{position:absolute;inset:0;direction:ltr}
+.mm-hero canvas{width:100%;height:100%;display:block}
+.mm-panel{
+  position:absolute;top:0;bottom:0;inset-inline-start:0;
+  width:min(400px,42vw);padding:max(26px,var(--safe-t)) calc(30px + var(--safe-i,0px)) max(22px,var(--safe-b)) 26px;
+  display:flex;flex-direction:column;gap:18px;
+  background:linear-gradient(to left,rgba(7,10,6,.94) 55%,rgba(7,10,6,.45) 80%,transparent 100%);
+  backdrop-filter:blur(2px);
 }
-.menu-top{display:flex;justify-content:space-between;align-items:flex-start}
-.menu-brandline{display:flex;gap:16px;align-items:center;color:var(--muted);font-size:12px;letter-spacing:.28em;text-transform:uppercase}
-.menu-brandline b{color:var(--accent);font-weight:700}
-.menu-main{display:flex;flex-direction:column;gap:22px;max-width:560px;margin-top:auto;margin-bottom:auto}
-.menu-title{
-  margin:0;font-size:clamp(52px,9.5vw,118px);line-height:.82;font-weight:800;
-  letter-spacing:.035em;text-transform:uppercase;text-shadow:0 8px 30px rgba(0,0,0,.6);
+html[dir="ltr"] .mm-panel{background:linear-gradient(to right,rgba(7,10,6,.94) 55%,rgba(7,10,6,.45) 80%,transparent 100%)}
+.mm-brand{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+.mm-kicker{font-family:var(--font-body);font-size:12.5px;letter-spacing:.14em;color:var(--muted)}
+.mm-title{
+  margin:0;font-size:clamp(34px,4.6vw,54px);line-height:.95;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink);text-shadow:0 4px 22px rgba(0,0,0,.55);
 }
-.menu-title span{display:block}
-.menu-title .l2{color:transparent;-webkit-text-stroke:1.5px rgba(227,166,63,.85);letter-spacing:.09em}
-.menu-tag{
-  font-family:var(--font-body);font-size:13px;color:var(--muted);max-width:430px;line-height:1.55;
-  padding-left:14px;border-left:2px solid var(--accent);
+.mm-title span{display:block;font-weight:400;font-size:.62em;letter-spacing:.3em;color:var(--accent)}
+.mm-save{
+  border:1px solid var(--line);background:rgba(10,13,8,.55);
+  padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-height:74px;
 }
-.menu-actions{display:flex;flex-direction:column;gap:9px;width:min(330px,74vw)}
-.menu-actions .btn{justify-content:flex-start;padding-left:20px;letter-spacing:.2em;min-height:48px}
-.menu-actions .btn .key{margin-left:auto;color:var(--dim);font-size:11px;letter-spacing:.1em}
-.menu-side{position:absolute;right:calc(26px + var(--safe-r));bottom:calc(20px + var(--safe-b));text-align:right;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
-.menu-side .stat{display:flex;gap:10px;align-items:baseline;font-size:12px;color:var(--muted);letter-spacing:.16em;text-transform:uppercase}
-.menu-side .stat b{font-size:20px;color:var(--ink);font-weight:700;letter-spacing:.03em}
-.menu-footer{display:flex;justify-content:space-between;align-items:center;color:var(--dim);font-size:11px;letter-spacing:.18em;text-transform:uppercase}
-.menu-footer .dot{width:5px;height:5px;background:var(--accent);display:inline-block;margin-right:8px;border-radius:50%}
+.mm-save .mm-row{display:flex;justify-content:space-between;gap:12px;font-family:var(--font-body);font-size:12.5px}
+.mm-save .mm-row .k{color:var(--dim);letter-spacing:.06em}
+.mm-save .mm-row .v{color:var(--ink);font-weight:600}
+.mm-save .mm-empty{font-family:var(--font-body);font-size:12.5px;color:var(--muted);align-self:center;margin:auto 0}
+.mm-save .mm-name{font-weight:700;color:var(--accent);font-size:13px;letter-spacing:.04em}
+.mm-ctas{display:flex;flex-direction:column;gap:9px}
+.mm-cta{min-height:46px;letter-spacing:.06em;font-size:15px;justify-content:flex-start;padding-inline:18px}
+.mm-utils{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  border-top:1px solid var(--line);padding-top:12px;
+}
+.mm-util{
+  background:none;border:none;color:var(--muted);font-family:var(--font-body);font-size:12.5px;
+  letter-spacing:.05em;cursor:pointer;padding:6px 2px;
+}
+.mm-util:hover{color:var(--accent)}
+.mm-sep{width:1px;height:12px;background:var(--line);display:inline-block}
+.mm-foot{margin-top:auto;font-family:var(--font-body);font-size:11px;color:var(--dim);letter-spacing:.08em}
+@media (max-height:420px){ .mm-save{min-height:58px} .mm-brand{gap:3px} .mm-panel{gap:12px} }
 
 /* ---------- hub / campaign ---------- */
 .resources{display:flex;gap:6px;flex-wrap:wrap}
@@ -617,29 +633,29 @@ input[type=range]::-moz-range-thumb{width:12px;height:16px;background:var(--acce
 
     <!-- ============ MAIN MENU ============ -->
     <section id="screen-menu" class="screen screen--menu is-active">
-      <div class="menu-top">
-        <div class="menu-brandline"><b>■</b> FIELD COMMAND SYSTEM <span>v1.0</span></div>
-        <div class="menu-brandline">TASK FORCE <b>NIGHTJAR</b></div>
-      </div>
-      <div class="menu-main">
-        <div class="kicker">Tactical squad operations</div>
-        <h1 class="menu-title"><span>SQUAD</span><span class="l2">COMMANDER</span></h1>
-        <p class="menu-tag">Six soldiers. One commander. Plan, pause, and press the assault &mdash; a real-time tactical squad game fought across nine hostile kilometres.</p>
-        <div class="menu-actions">
-          <button class="btn btn--primary" data-act="continue"><span data-i18n="menu.continue">ادامه</span> <span class="key" id="menu-continue-note">AUTO</span></button>
-          <button class="btn" data-act="new" data-i18n="menu.new">عملیات جدید</button>
-          <button class="btn" data-act="barracks" data-i18n="menu.barracks">پادگان</button>
-          <button class="btn" data-act="settings">Settings</button>
-          <button class="btn btn--ghost" data-act="help">Controls &amp; Field Manual</button>
-          <button class="btn btn--ghost" data-act="credits" data-i18n="menu.credits">درباره سازنده</button>
+      <div class="mm-hero" id="mm-hero"></div>
+      <div class="mm-panel">
+        <div class="mm-brand">
+          <div class="mm-kicker" data-i18n="menu.kicker">فرماندهی تاکتیکی گروه</div>
+          <h1 class="mm-title">SQUAD<span>COMMANDER</span></h1>
         </div>
+        <div class="mm-save" id="mm-save"></div>
+        <nav class="mm-ctas">
+          <button class="btn btn--primary mm-cta" data-act="continue"><span data-i18n="menu.continue">ادامه عملیات</span></button>
+          <button class="btn mm-cta" data-act="new" data-i18n="menu.new">عملیات جدید</button>
+          <button class="btn mm-cta" data-act="barracks" data-i18n="menu.barracks">پادگان</button>
+        </nav>
+        <nav class="mm-utils">
+          <button class="mm-util" data-act="stats" data-i18n="menu.stats">آمار</button>
+          <span class="mm-sep"></span>
+          <button class="mm-util" data-act="settings" data-i18n="menu.settings">تنظیمات</button>
+          <span class="mm-sep"></span>
+          <button class="mm-util" data-act="help" data-i18n="menu.help">راهنما</button>
+          <span class="mm-sep"></span>
+          <button class="mm-util" data-act="credits" data-i18n="menu.credits">درباره سازنده</button>
+        </nav>
+        <div class="mm-foot"><span id="menu-build"></span></div>
       </div>
-      <div class="menu-side" id="menu-side"></div>
-      <div class="menu-footer">
-        <div><span class="dot"></span>SQUAD COMMANDER &mdash; OFFLINE TACTICAL SIMULATION</div>
-        <div id="menu-build"></div>
-      </div>
-      <div class="grain"></div>
     </section>
 
     <!-- ============ NEW CAMPAIGN ============ -->
@@ -672,8 +688,8 @@ input[type=range]::-moz-range-thumb{width:12px;height:16px;background:var(--acce
       <div class="screen-head">
         <div class="title-block">
           <div class="kicker">Base of operations</div>
-          <h2 class="screen-title">Operations</h2>
-          <div class="screen-sub" id="hub-sub">Task Force Nightjar &mdash; ready for tasking</div>
+          <h2 class="screen-title" data-i18n="hub.title">عملیات‌ها</h2>
+          <div class="screen-sub" id="hub-sub" data-i18n="hub.sub">نیروی ویژه NIGHTJAR — آماده مأموریت</div>
         </div>
         <div class="resources" id="hub-resources"></div>
       </div>
@@ -1310,7 +1326,7 @@ function icon(name, cls = 'ico') {
 /* ============================================================
    02 — DATA DEFINITIONS
    ============================================================ */
-const GAME_VERSION = '2.1.0';
+const GAME_VERSION = '2.3.0';
 const SAVE_KEY = 'squadcommander.save.v3';
 const SAVE_BACKUP = 'squadcommander.save.v3.bak';
 const SAVE_PENDING = 'squadcommander.save.v3.pending';
@@ -1792,6 +1808,8 @@ const L10N = {
       'menu.new': 'عملیات جدید', 'menu.continue': 'ادامه', 'menu.barracks': 'پادگان',
       'menu.arsenal': 'زره‌خانه', 'menu.stats': 'آمار', 'menu.settings': 'تنظیمات',
       'menu.help': 'راهنما', 'menu.credits': 'درباره سازنده', 'menu.build': 'نسخه',
+      'menu.kicker': 'فرماندهی تاکتیکی گروه رزمی', 'menu.campaign': 'پیشرفت عملیات',
+      'menu.ready': 'نیروی آماده', 'menu.credits2': 'اعتبار', 'menu.nosave': 'هنوز کمپینی آغاز نشده — «عملیات جدید» را آغاز کنید',
       'campaign.select': 'انتخاب عملیات', 'campaign.region': 'منطقه',
       'briefing.deploy': 'اعزام', 'briefing.squad': 'گروه رزمی',
       'battle.move': 'حرکت', 'battle.hold': 'تثبیت', 'battle.cover': 'سنگرگیری',
@@ -1809,7 +1827,7 @@ const L10N = {
       'set.sfx': 'جلوه‌های صوتی', 'set.quality': 'کیفیت گرافیک', 'set.diagnostics': 'نمایش کارایی',
       'credits.title': 'درباره سازنده', 'credits.made': 'ساخته‌شده توسط Amin',
       'credits.telegram': 'تلگرام', 'credits.rubika': 'روبیکا',
-      'role.commander': 'فرمانده', 'role.rifleman': 'تفنگدار', 'role.assault': 'یورش‌بر',
+      'hub.title': 'عملیات‌ها', 'hub.sub': 'نیروی ویژه NIGHTJAR — آماده مأموریت', 'hub.secured': 'همه‌ی مناطق امن شد', 'hub.ready': 'آماده مأموریت', 'role.commander': 'فرمانده', 'role.rifleman': 'تفنگدار', 'role.assault': 'یورش‌بر',
       'role.support': 'پشتیبان', 'role.sniper': 'تیرانداز دقیق', 'role.medic': 'بهدار',
       'role.engineer': 'مهندس رزمی'
     },
@@ -1834,7 +1852,9 @@ const L10N = {
       'set.sfx': 'Effects', 'set.quality': 'Quality', 'set.diagnostics': 'Performance HUD',
       'credits.title': 'About the creator', 'credits.made': 'Made by Amin',
       'credits.telegram': 'Telegram', 'credits.rubika': 'Rubika',
-      'role.commander': 'Commander', 'role.rifleman': 'Rifleman', 'role.assault': 'Assault',
+      'menu.kicker': 'Tactical squad command', 'menu.campaign': 'Campaign',
+      'menu.ready': 'Ready soldiers', 'menu.credits2': 'Credits', 'menu.nosave': 'No campaign yet — start a new operation',
+      'hub.title': 'Operations', 'hub.sub': 'Task Force Nightjar — ready for tasking', 'hub.secured': 'all regions secured', 'hub.ready': 'ready for tasking', 'role.commander': 'Commander', 'role.rifleman': 'Rifleman', 'role.assault': 'Assault',
       'role.support': 'Support', 'role.sniper': 'Sniper', 'role.medic': 'Medic',
       'role.engineer': 'Engineer'
     }
@@ -8560,6 +8580,32 @@ function drawGrain(ctx, W, H, t) {
 }
 
 /* ---------- menu scene ---------- */
+/* ---- hero plate cache: expensive static background rendered once per
+   camera step and reused — richer detail affordable at near-zero cost ---- */
+const MenuPlate = {
+  cache: new Map(),
+  step: 30,
+  key(cam) { return Math.round(cam.x / this.step); },
+  get(cam, level, t) {
+    const k = this.key(cam);
+    let entry = this.cache.get(k);
+    if (!entry) {
+      const cv = document.createElement('canvas');
+      cv.width = Math.ceil(Stage.w * Stage.dpr);
+      cv.height = Math.ceil(Stage.h * Stage.dpr);
+      const c = cv.getContext('2d');
+      c.scale(Stage.dpr, Stage.dpr);
+      const snap = Object.assign({}, cam, { x: k * this.step, shakeX: 0, shakeY: 0, shake: 0 });
+      drawMenuBackdrop(c, level, snap, 12.3, { units: null });
+      entry = { cv };
+      if (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
+      this.cache.set(k, entry);
+    }
+    return entry.cv;
+  },
+  invalidate() { this.cache.clear(); }
+};
+
 const MenuScene = {
   level: null,
   cam: null,
@@ -8608,12 +8654,29 @@ const MenuScene = {
     if (!this.level) this.init();
     const cam = this.cam;
     const pan = Math.sin(t * 0.045) * 120;
-    cam.x = 1500 + pan;
-    cam.y = 380 + Math.sin(t * 0.03) * 18;
-    drawMenuBackdrop(ctx, this.level, cam, t, {
-      units: this.units,
-      tint: 'rgba(4,6,4,.25)'
-    });
+    // squad sits in the visible (non-panel) side of the composition
+    cam.x = 1760 + pan * 0.6;
+    cam.y = 400 + Math.sin(t * 0.03) * 14;
+    // 1) cached background plate (sky→props) for the snapped camera step
+    const plate = MenuPlate.get(cam, this.level, t);
+    ctx.setTransform(Stage.dpr, 0, 0, Stage.dpr, 0, 0);
+    const drift = ((cam.x % MenuPlate.step) / MenuPlate.step) * MenuPlate.step * 0.1; // subtle inner drift
+    ctx.drawImage(plate, -drift * Stage.dpr, 0, plate.width / Stage.dpr + 2, plate.height / Stage.dpr);
+    // 2) live layer: units only, using the same snapped camera
+    const snap = Object.assign({}, cam, { x: MenuPlate.key(cam) * MenuPlate.step, shakeX: 0, shakeY: 0, shake: 0 });
+    Stage.apply(ctx, snap);
+    const view = Stage.viewFor(snap);
+    for (const u of this.units) Art.drawUnit(ctx, u, t);
+    ctx.setTransform(Stage.dpr, 0, 0, Stage.dpr, 0, 0);
+    const pal = this.level.paletteData;
+    drawMenuDust(ctx, Stage.w, Stage.h, t, pal);
+    // cinematic grade: warm ground glow + vignette
+    const grade = ctx.createLinearGradient(0, Stage.h * 0.55, 0, Stage.h);
+    grade.addColorStop(0, 'rgba(227,166,63,0)');
+    grade.addColorStop(1, 'rgba(227,166,63,.06)');
+    ctx.fillStyle = grade; ctx.fillRect(0, 0, Stage.w, Stage.h);
+    drawVignette(ctx, Stage.w, Stage.h, 0.85);
+    ctx.fillStyle = 'rgba(4,6,4,.08)'; ctx.fillRect(0, 0, Stage.w, Stage.h);
   }
 };
 
@@ -9404,30 +9467,24 @@ const UI = {
   },
   renderMenu() {
     const d = Campaign.data;
-    const side = $('#menu-side');
-    if (side) {
+    const save = $('#mm-save');
+    if (save) {
       if (d) {
-        const total = MISSIONS.length;
         const done = MISSIONS.filter((m) => d.progress[m.id] && d.progress[m.id].completed).length;
-        side.innerHTML = `
-          <div class="stat"><span>OPERATIONS</span><b>${done}/${total}</b></div>
-          <div class="stat"><span>SQUAD READY</span><b>${Campaign.readyRoster().length}</b></div>
-          <div class="stat"><span>CREDITS</span><b>${fmtNum(d.credits)}</b></div>`;
-      } else side.innerHTML = '';
-    }
-    const cont = $('[data-act="continue"]');
-    if (cont) {
-      const note = $('#menu-continue-note');
-      if (d) {
-        const active = MISSIONS.find((m) => d.progress[m.id] && d.progress[m.id].status === 'available');
-        if (note) note.textContent = active ? active.name : 'CAMPAIGN';
-        cont.disabled = false;
+        const next = MISSIONS.find((m) => d.progress[m.id] && d.progress[m.id].status === 'available' && !d.progress[m.id].completed);
+        const region = next ? REGIONS[next.region] : null;
+        save.innerHTML = `
+          <div class="mm-row"><span class="k">${L10N.t('menu.campaign')}</span><span class="v">${done}/${MISSIONS.length}</span></div>
+          ${next ? `<div class="mm-name">${esc(next.name)}${region ? ' · ' + esc(region.name || '') : ''}</div>` : ''}
+          <div class="mm-row"><span class="k">${L10N.t('menu.ready')}</span><span class="v">${Campaign.readyRoster().length}</span></div>
+          <div class="mm-row"><span class="k">${L10N.t('menu.credits2')}</span><span class="v">${fmtNum(d.credits)}</span></div>`;
       } else {
-        if (note) note.textContent = 'NEW';
-        cont.disabled = false;
+        save.innerHTML = `<div class="mm-empty">${esc(L10N.t('menu.nosave'))}</div>`;
       }
     }
-    const build = $('#menu-build');
+    const cont = $('[data-act="continue"]');
+    if (cont) cont.disabled = false;
+const build = $('#menu-build');
     if (build) build.textContent = 'BUILD ' + GAME_VERSION;
   },
   renderNewGame() {
@@ -9503,7 +9560,7 @@ const UI = {
       foot.textContent = `CAMPAIGN PROGRESS ${done} / ${MISSIONS.length} · ${DIFFICULTIES[d.difficulty] ? DIFFICULTIES[d.difficulty].label : ''}`;
     }
     const sub = $('#hub-sub');
-    if (sub) sub.textContent = 'Task Force Nightjar — ' + (Campaign.allMissionsComplete() ? 'all regions secured' : 'ready for tasking');
+    if (sub) sub.textContent = 'Task Force Nightjar — ' + (Campaign.allMissionsComplete() ? L10N.t('hub.secured') : L10N.t('hub.ready'));
   },
   missionCard(m) {
     const d = Campaign.data;

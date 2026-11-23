@@ -644,6 +644,32 @@ function drawGrain(ctx, W, H, t) {
 }
 
 /* ---------- menu scene ---------- */
+/* ---- hero plate cache: expensive static background rendered once per
+   camera step and reused — richer detail affordable at near-zero cost ---- */
+const MenuPlate = {
+  cache: new Map(),
+  step: 30,
+  key(cam) { return Math.round(cam.x / this.step); },
+  get(cam, level, t) {
+    const k = this.key(cam);
+    let entry = this.cache.get(k);
+    if (!entry) {
+      const cv = document.createElement('canvas');
+      cv.width = Math.ceil(Stage.w * Stage.dpr);
+      cv.height = Math.ceil(Stage.h * Stage.dpr);
+      const c = cv.getContext('2d');
+      c.scale(Stage.dpr, Stage.dpr);
+      const snap = Object.assign({}, cam, { x: k * this.step, shakeX: 0, shakeY: 0, shake: 0 });
+      drawMenuBackdrop(c, level, snap, 12.3, { units: null });
+      entry = { cv };
+      if (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
+      this.cache.set(k, entry);
+    }
+    return entry.cv;
+  },
+  invalidate() { this.cache.clear(); }
+};
+
 const MenuScene = {
   level: null,
   cam: null,
@@ -692,11 +718,28 @@ const MenuScene = {
     if (!this.level) this.init();
     const cam = this.cam;
     const pan = Math.sin(t * 0.045) * 120;
-    cam.x = 1500 + pan;
-    cam.y = 380 + Math.sin(t * 0.03) * 18;
-    drawMenuBackdrop(ctx, this.level, cam, t, {
-      units: this.units,
-      tint: 'rgba(4,6,4,.25)'
-    });
+    // squad sits in the visible (non-panel) side of the composition
+    cam.x = 1760 + pan * 0.6;
+    cam.y = 400 + Math.sin(t * 0.03) * 14;
+    // 1) cached background plate (sky→props) for the snapped camera step
+    const plate = MenuPlate.get(cam, this.level, t);
+    ctx.setTransform(Stage.dpr, 0, 0, Stage.dpr, 0, 0);
+    const drift = ((cam.x % MenuPlate.step) / MenuPlate.step) * MenuPlate.step * 0.1; // subtle inner drift
+    ctx.drawImage(plate, -drift * Stage.dpr, 0, plate.width / Stage.dpr + 2, plate.height / Stage.dpr);
+    // 2) live layer: units only, using the same snapped camera
+    const snap = Object.assign({}, cam, { x: MenuPlate.key(cam) * MenuPlate.step, shakeX: 0, shakeY: 0, shake: 0 });
+    Stage.apply(ctx, snap);
+    const view = Stage.viewFor(snap);
+    for (const u of this.units) Art.drawUnit(ctx, u, t);
+    ctx.setTransform(Stage.dpr, 0, 0, Stage.dpr, 0, 0);
+    const pal = this.level.paletteData;
+    drawMenuDust(ctx, Stage.w, Stage.h, t, pal);
+    // cinematic grade: warm ground glow + vignette
+    const grade = ctx.createLinearGradient(0, Stage.h * 0.55, 0, Stage.h);
+    grade.addColorStop(0, 'rgba(227,166,63,0)');
+    grade.addColorStop(1, 'rgba(227,166,63,.06)');
+    ctx.fillStyle = grade; ctx.fillRect(0, 0, Stage.w, Stage.h);
+    drawVignette(ctx, Stage.w, Stage.h, 0.85);
+    ctx.fillStyle = 'rgba(4,6,4,.08)'; ctx.fillRect(0, 0, Stage.w, Stage.h);
   }
 };

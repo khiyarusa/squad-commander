@@ -11,6 +11,8 @@ const L10N = {
       'menu.new': 'عملیات جدید', 'menu.continue': 'ادامه', 'menu.barracks': 'پادگان',
       'menu.arsenal': 'زره‌خانه', 'menu.stats': 'آمار', 'menu.settings': 'تنظیمات',
       'menu.help': 'راهنما', 'menu.credits': 'درباره سازنده', 'menu.build': 'نسخه',
+      'menu.kicker': 'فرماندهی تاکتیکی گروه رزمی', 'menu.campaign': 'پیشرفت عملیات',
+      'menu.ready': 'نیروی آماده', 'menu.credits2': 'اعتبار', 'menu.nosave': 'هنوز کمپینی آغاز نشده — «عملیات جدید» را آغاز کنید',
       'campaign.select': 'انتخاب عملیات', 'campaign.region': 'منطقه',
       'briefing.deploy': 'اعزام', 'briefing.squad': 'گروه رزمی',
       'battle.move': 'حرکت', 'battle.hold': 'تثبیت', 'battle.cover': 'سنگرگیری',
@@ -28,7 +30,7 @@ const L10N = {
       'set.sfx': 'جلوه‌های صوتی', 'set.quality': 'کیفیت گرافیک', 'set.diagnostics': 'نمایش کارایی',
       'credits.title': 'درباره سازنده', 'credits.made': 'ساخته‌شده توسط Amin',
       'credits.telegram': 'تلگرام', 'credits.rubika': 'روبیکا',
-      'role.commander': 'فرمانده', 'role.rifleman': 'تفنگدار', 'role.assault': 'یورش‌بر',
+      'hub.title': 'عملیات‌ها', 'hub.sub': 'نیروی ویژه NIGHTJAR — آماده مأموریت', 'hub.secured': 'همه‌ی مناطق امن شد', 'hub.ready': 'آماده مأموریت', 'role.commander': 'فرمانده', 'role.rifleman': 'تفنگدار', 'role.assault': 'یورش‌بر',
       'role.support': 'پشتیبان', 'role.sniper': 'تیرانداز دقیق', 'role.medic': 'بهدار',
       'role.engineer': 'مهندس رزمی'
     },
@@ -53,7 +55,9 @@ const L10N = {
       'set.sfx': 'Effects', 'set.quality': 'Quality', 'set.diagnostics': 'Performance HUD',
       'credits.title': 'About the creator', 'credits.made': 'Made by Amin',
       'credits.telegram': 'Telegram', 'credits.rubika': 'Rubika',
-      'role.commander': 'Commander', 'role.rifleman': 'Rifleman', 'role.assault': 'Assault',
+      'menu.kicker': 'Tactical squad command', 'menu.campaign': 'Campaign',
+      'menu.ready': 'Ready soldiers', 'menu.credits2': 'Credits', 'menu.nosave': 'No campaign yet — start a new operation',
+      'hub.title': 'Operations', 'hub.sub': 'Task Force Nightjar — ready for tasking', 'hub.secured': 'all regions secured', 'hub.ready': 'ready for tasking', 'role.commander': 'Commander', 'role.rifleman': 'Rifleman', 'role.assault': 'Assault',
       'role.support': 'Support', 'role.sniper': 'Sniper', 'role.medic': 'Medic',
       'role.engineer': 'Engineer'
     }

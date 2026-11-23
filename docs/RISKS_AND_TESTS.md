@@ -69,6 +69,6 @@
 - Release gate: all suites green, zero console errors, offline, single file, recovery verified.
 
 ## Verified status (end of overhaul)
-- 15 suites, ~395 assertions, all green; `npm test` rebuilds and runs everything; GitHub Actions runs the same gate on push.
+- 17 suites, ~460 assertions, all green; `npm test` rebuilds and runs everything; GitHub Actions runs the same gate on push.
 - Known accepted limitations: procedural art + synthesized audio only; localStorage required
   for saves; headless CI runs at low FPS (adaptive quality covers this).

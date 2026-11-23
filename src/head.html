@@ -22,29 +22,29 @@
 
     <!-- ============ MAIN MENU ============ -->
     <section id="screen-menu" class="screen screen--menu is-active">
-      <div class="menu-top">
-        <div class="menu-brandline"><b>■</b> FIELD COMMAND SYSTEM <span>v1.0</span></div>
-        <div class="menu-brandline">TASK FORCE <b>NIGHTJAR</b></div>
-      </div>
-      <div class="menu-main">
-        <div class="kicker">Tactical squad operations</div>
-        <h1 class="menu-title"><span>SQUAD</span><span class="l2">COMMANDER</span></h1>
-        <p class="menu-tag">Six soldiers. One commander. Plan, pause, and press the assault &mdash; a real-time tactical squad game fought across nine hostile kilometres.</p>
-        <div class="menu-actions">
-          <button class="btn btn--primary" data-act="continue"><span data-i18n="menu.continue">ادامه</span> <span class="key" id="menu-continue-note">AUTO</span></button>
-          <button class="btn" data-act="new" data-i18n="menu.new">عملیات جدید</button>
-          <button class="btn" data-act="barracks" data-i18n="menu.barracks">پادگان</button>
-          <button class="btn" data-act="settings">Settings</button>
-          <button class="btn btn--ghost" data-act="help">Controls &amp; Field Manual</button>
-          <button class="btn btn--ghost" data-act="credits" data-i18n="menu.credits">درباره سازنده</button>
+      <div class="mm-hero" id="mm-hero"></div>
+      <div class="mm-panel">
+        <div class="mm-brand">
+          <div class="mm-kicker" data-i18n="menu.kicker">فرماندهی تاکتیکی گروه</div>
+          <h1 class="mm-title">SQUAD<span>COMMANDER</span></h1>
         </div>
+        <div class="mm-save" id="mm-save"></div>
+        <nav class="mm-ctas">
+          <button class="btn btn--primary mm-cta" data-act="continue"><span data-i18n="menu.continue">ادامه عملیات</span></button>
+          <button class="btn mm-cta" data-act="new" data-i18n="menu.new">عملیات جدید</button>
+          <button class="btn mm-cta" data-act="barracks" data-i18n="menu.barracks">پادگان</button>
+        </nav>
+        <nav class="mm-utils">
+          <button class="mm-util" data-act="stats" data-i18n="menu.stats">آمار</button>
+          <span class="mm-sep"></span>
+          <button class="mm-util" data-act="settings" data-i18n="menu.settings">تنظیمات</button>
+          <span class="mm-sep"></span>
+          <button class="mm-util" data-act="help" data-i18n="menu.help">راهنما</button>
+          <span class="mm-sep"></span>
+          <button class="mm-util" data-act="credits" data-i18n="menu.credits">درباره سازنده</button>
+        </nav>
+        <div class="mm-foot"><span id="menu-build"></span></div>
       </div>
-      <div class="menu-side" id="menu-side"></div>
-      <div class="menu-footer">
-        <div><span class="dot"></span>SQUAD COMMANDER &mdash; OFFLINE TACTICAL SIMULATION</div>
-        <div id="menu-build"></div>
-      </div>
-      <div class="grain"></div>
     </section>
 
     <!-- ============ NEW CAMPAIGN ============ -->
@@ -77,8 +77,8 @@
       <div class="screen-head">
         <div class="title-block">
           <div class="kicker">Base of operations</div>
-          <h2 class="screen-title">Operations</h2>
-          <div class="screen-sub" id="hub-sub">Task Force Nightjar &mdash; ready for tasking</div>
+          <h2 class="screen-title" data-i18n="hub.title">عملیات‌ها</h2>
+          <div class="screen-sub" id="hub-sub" data-i18n="hub.sub">نیروی ویژه NIGHTJAR — آماده مأموریت</div>
         </div>
         <div class="resources" id="hub-resources"></div>
       </div>

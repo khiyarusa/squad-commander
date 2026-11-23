@@ -96,12 +96,20 @@ const h = require('./lib/harness');
   });
 
   await h.test('perf HUD toggles from settings and reports frame stats', async () => {
-    const r = await page.evaluate(() => {
-      Campaign.settings.diagnostics = true;
-      document.getElementById('set-diagnostics').classList.add('on');
-      return { visible: document.getElementById('perf-hud').style.display !== 'none' };
+    await page.evaluate(() => { Campaign.settings.diagnostics = true; });
+    await page.waitForTimeout(400); // let the render loop apply the HUD
+    const on = await page.evaluate(() => {
+      const el = document.getElementById('perf-hud');
+      return { display: el.style.display, text: el.textContent };
     });
-    h.assert(r.visible === true || true, 'diagnostics setting stored (HUD renders on next frame)');
+    h.assert(on.display === 'block', 'HUD visible with diagnostics on');
+    h.assert(/FPS/.test(on.text) && /frame/.test(on.text), 'HUD reports FPS and frame time: ' + JSON.stringify(on.text));
+    const fps = parseInt((on.text.match(/FPS ~(\d+)/) || [])[1], 10);
+    h.assert(fps > 0 && fps <= 240, 'FPS reading plausible (' + fps + ')');
+    await page.evaluate(() => { Campaign.settings.diagnostics = false; });
+    await page.waitForTimeout(400);
+    const off = await page.evaluate(() => document.getElementById('perf-hud').style.display);
+    h.assert(off === 'none', 'HUD hidden with diagnostics off');
   });
 
   h.assertClean(ctx);

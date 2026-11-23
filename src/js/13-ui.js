@@ -239,30 +239,24 @@ const UI = {
   },
   renderMenu() {
     const d = Campaign.data;
-    const side = $('#menu-side');
-    if (side) {
+    const save = $('#mm-save');
+    if (save) {
       if (d) {
-        const total = MISSIONS.length;
         const done = MISSIONS.filter((m) => d.progress[m.id] && d.progress[m.id].completed).length;
-        side.innerHTML = `
-          <div class="stat"><span>OPERATIONS</span><b>${done}/${total}</b></div>
-          <div class="stat"><span>SQUAD READY</span><b>${Campaign.readyRoster().length}</b></div>
-          <div class="stat"><span>CREDITS</span><b>${fmtNum(d.credits)}</b></div>`;
-      } else side.innerHTML = '';
-    }
-    const cont = $('[data-act="continue"]');
-    if (cont) {
-      const note = $('#menu-continue-note');
-      if (d) {
-        const active = MISSIONS.find((m) => d.progress[m.id] && d.progress[m.id].status === 'available');
-        if (note) note.textContent = active ? active.name : 'CAMPAIGN';
-        cont.disabled = false;
+        const next = MISSIONS.find((m) => d.progress[m.id] && d.progress[m.id].status === 'available' && !d.progress[m.id].completed);
+        const region = next ? REGIONS[next.region] : null;
+        save.innerHTML = `
+          <div class="mm-row"><span class="k">${L10N.t('menu.campaign')}</span><span class="v">${done}/${MISSIONS.length}</span></div>
+          ${next ? `<div class="mm-name">${esc(next.name)}${region ? ' · ' + esc(region.name || '') : ''}</div>` : ''}
+          <div class="mm-row"><span class="k">${L10N.t('menu.ready')}</span><span class="v">${Campaign.readyRoster().length}</span></div>
+          <div class="mm-row"><span class="k">${L10N.t('menu.credits2')}</span><span class="v">${fmtNum(d.credits)}</span></div>`;
       } else {
-        if (note) note.textContent = 'NEW';
-        cont.disabled = false;
+        save.innerHTML = `<div class="mm-empty">${esc(L10N.t('menu.nosave'))}</div>`;
       }
     }
-    const build = $('#menu-build');
+    const cont = $('[data-act="continue"]');
+    if (cont) cont.disabled = false;
+const build = $('#menu-build');
     if (build) build.textContent = 'BUILD ' + GAME_VERSION;
   },
   renderNewGame() {
@@ -338,7 +332,7 @@ const UI = {
       foot.textContent = `CAMPAIGN PROGRESS ${done} / ${MISSIONS.length} · ${DIFFICULTIES[d.difficulty] ? DIFFICULTIES[d.difficulty].label : ''}`;
     }
     const sub = $('#hub-sub');
-    if (sub) sub.textContent = 'Task Force Nightjar — ' + (Campaign.allMissionsComplete() ? 'all regions secured' : 'ready for tasking');
+    if (sub) sub.textContent = 'Task Force Nightjar — ' + (Campaign.allMissionsComplete() ? L10N.t('hub.secured') : L10N.t('hub.ready'));
   },
   missionCard(m) {
     const d = Campaign.data;

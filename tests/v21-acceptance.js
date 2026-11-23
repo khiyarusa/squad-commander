@@ -249,8 +249,8 @@ const h = require('./lib/harness');
       footer: document.getElementById('footer-version').textContent,
       constant: GAME_VERSION
     }));
-    h.assert(r.menu === 'BUILD 2.1.0', 'menu build label = ' + r.menu);
-    h.assert(r.footer.includes('2.1.0'), 'footer label = ' + r.footer);
+    h.assert(r.menu === 'BUILD ' + r.constant, 'menu build label matches GAME_VERSION (' + r.menu + ')');
+    h.assert(r.footer.includes(r.constant), 'footer label = ' + r.footer);
   });
 
   h.assertClean(ctx);

@@ -59,6 +59,8 @@ node tests/save.js         # v3 checksums, backup recovery, import validation
 node tests/mobile.js       # touch, orders, all 12 missions, persistence
 node tests/edge-cases.js   # scripted spec edge cases
 node tests/v21-acceptance.js # carry state, path retries, drop edges, drag reorder
+node tests/v22-acceptance.js # Persian RTL, credits, reachability repair, stall guard
+node tests/v23-acceptance.js # menu redesign, version source, plate cache
 node tests/perf.js         # frame budget + 10-minute soak
 node tests/balance.js      # cautious-play campaign simulation
 node tests/environments.js # every theme renders clean, heap budget

@@ -82,7 +82,7 @@ const h = require('./lib/harness');
     const bb = await card.boundingBox();
     await page.mouse.move(bb.x + 20, bb.y + 20);
     await page.mouse.down();
-    await page.waitForTimeout(650);
+    await page.waitForTimeout(900); // long-press threshold is 520 ms — hold well past it
     await page.mouse.up();
     await page.waitForTimeout(150);
     const sel2 = await page.evaluate(() => window.__SC.battle.selected.size);
