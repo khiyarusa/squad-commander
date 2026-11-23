@@ -139,6 +139,26 @@ async function fresh(page) {
     h.assert(r.without > 0 && r.without <= 1, 'confidence is a clamped 0..1 value');
   });
 
+  await h.test('commander influence is radius-bound, not global', async () => {
+    const setup = await fresh(page);
+    const r = await page.evaluate(({ id }) => {
+      const b = window.__SC.battle;
+      const e = b.enemies.find((q) => q.id === id);
+      e.suppression = 0;
+      const boss = { id: 'boss_far', enemyType: 'commander', dead: false, x: e.x + 1200, y: e.y };
+      b.enemies.push(boss);
+      const farConf = b.enemyConfidence(e);
+      boss.x = e.x + 120;
+      const nearConf = b.enemyConfidence(e);
+      boss.dead = true;
+      const deadConf = b.enemyConfidence(e);
+      b.enemies.pop();
+      return { near: +nearConf.toFixed(3), far: +farConf.toFixed(3), dead: +deadConf.toFixed(3) };
+    }, setup);
+    h.assert(r.near > r.far, 'nearby warlord raises confidence more than a distant one (' + r.near + ' vs ' + r.far + ')');
+    h.assert(r.dead === r.far, 'dead warlord has no aura');
+  });
+
   await h.test('coordinated alerting spreads contact to nearby hostiles', async () => {
     const setup = await fresh(page);
     const r = await page.evaluate(({ id }) => {
@@ -181,6 +201,23 @@ async function fresh(page) {
     h.assert(r.types.sniper.view > r.types.rifleman.view, 'sniper sees farther than a rifleman');
   });
 
+  await h.test('regression: stale target under heavy suppression keeps the engage state', async () => {
+    const setup = await fresh(page);
+    const r = await page.evaluate(({ x, id }) => {
+      const b = window.__SC.battle;
+      const e = b.enemies.find((q) => q.id === id);
+      for (const o of b.allies) { o.x = -4000; o.y = 620; } // nothing perceivable
+      e.x = x; e.y = b.level.surfaceAt(x);
+      e.aiState = 'engage'; e.suppression = 80; e.stateT = 2;
+      e.target = { id: 'ghost', dead: false }; // stale contact, lastSeenT long past
+      e.thinkT = 0; e.lastSeenT = b.time - 10; e.lastSeen = { x: e.x + 100, y: e.y };
+      b.updateEnemyAI(e, 0.016);
+      b.updateEnemyAI(e, 0.016);
+      return { state: e.aiState, target: e.target && e.target.id, thinkT: e.thinkT };
+    }, setup);
+    h.assert(r.state !== 'patrol', 'pinned engaged enemy must not collapse to patrol (now: ' + r.state + ')');
+  });
+
   await h.test('suppression drives pinned enemies out of aggression', async () => {
     const setup = await fresh(page);
     const r = await page.evaluate(({ id }) => {
@@ -190,6 +227,9 @@ async function fresh(page) {
       const cov = b.level.covers.find((c) => !c.dead);
       e.x = cov.x + 70; e.y = b.level.surfaceAt(e.x);
       e.aiState = 'engage'; e.stateT = 2; e.suppression = 80; e.target = b.allies[0];
+      // determinism: perception must not run during this tick and must not
+      // invalidate the forced target through a stale lastSeenT
+      e.thinkT = 10; e.lastSeenT = b.time; e.lastSeen = { x: b.allies[0].x, y: b.allies[0].y };
       b.updateEnemyAI(e, 0.016);
       return { state: e.aiState, sup: e.suppression, pinned: e.suppression > 62, coverNear: !!b.level.covers.find((c) => !c.dead && Math.abs(c.x - e.x) < 260) };
     }, setup);

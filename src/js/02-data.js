@@ -2,7 +2,7 @@
 /* ============================================================
    02 — DATA DEFINITIONS
    ============================================================ */
-const GAME_VERSION = '2.3.0';
+const GAME_VERSION = '3.0.0';
 const SAVE_KEY = 'squadcommander.save.v3';
 const SAVE_BACKUP = 'squadcommander.save.v3.bak';
 const SAVE_PENDING = 'squadcommander.save.v3.pending';

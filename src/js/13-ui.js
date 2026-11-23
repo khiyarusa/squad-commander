@@ -59,9 +59,15 @@ const UI = {
     const el = document.createElement('div');
     el.className = 'toast ' + kind;
     el.textContent = text;
+    // coalesce identical consecutive notifications (combat spam)
+    const last = wrap.lastElementChild;
+    if (last && last.textContent === text) { last.dataset.n = (+last.dataset.n || 1) + 1; last.textContent = text + (last.dataset.n > 1 ? ' ×' + last.dataset.n : ''); return; }
     wrap.appendChild(el);
-    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 2600);
-    while (wrap.children.length > 4) wrap.firstChild.remove();
+    const life = setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 2600);
+    el._life = life;
+    // hard cap: mission-critical kinds push ordinary ones out
+    while (wrap.children.length > 3) wrap.firstChild.remove();
+    el.addEventListener('click', () => { clearTimeout(el._life); el.remove(); });
   },
   show(name) {
     if (typeof App !== 'undefined' && App.scene === 'battle' && name !== 'results' && name !== 'settings' && name !== 'help') {

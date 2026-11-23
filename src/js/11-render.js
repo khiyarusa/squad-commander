@@ -649,7 +649,12 @@ function drawGrain(ctx, W, H, t) {
 const MenuPlate = {
   cache: new Map(),
   step: 30,
-  key(cam) { return Math.round(cam.x / this.step); },
+  maxEntries: 5, // bounded memory: 5 full-screen plates max
+  key(cam) {
+    // the plate content depends on camera X step AND viewport + DPR;
+    // anything else silently serves stale art after a resize/orientation flip
+    return Math.round(cam.x / this.step) + '|' + Stage.w + 'x' + Stage.h + '@' + Stage.dpr;
+  },
   get(cam, level, t) {
     const k = this.key(cam);
     let entry = this.cache.get(k);
@@ -659,12 +664,18 @@ const MenuPlate = {
       cv.height = Math.ceil(Stage.h * Stage.dpr);
       const c = cv.getContext('2d');
       c.scale(Stage.dpr, Stage.dpr);
-      const snap = Object.assign({}, cam, { x: k * this.step, shakeX: 0, shakeY: 0, shake: 0 });
+      const snap = Object.assign({}, cam, { x: Math.round(cam.x / this.step) * this.step, shakeX: 0, shakeY: 0, shake: 0 });
       drawMenuBackdrop(c, level, snap, 12.3, { units: null });
-      entry = { cv };
-      if (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value);
+      entry = { cv, at: performance.now() };
+      // LRU eviction with a strict budget
+      while (this.cache.size >= this.maxEntries) {
+        let oldest = null, ot = Infinity;
+        for (const [key, val] of this.cache) if (val.at < ot) { ot = val.at; oldest = key; }
+        if (oldest == null) break;
+        this.cache.delete(oldest);
+      }
       this.cache.set(k, entry);
-    }
+    } else entry.at = performance.now();
     return entry.cv;
   },
   invalidate() { this.cache.clear(); }
@@ -716,6 +727,10 @@ const MenuScene = {
   },
   render(ctx, t) {
     if (!this.level) this.init();
+    if (this._lastW !== Stage.w || this._lastDPR !== Stage.dpr) {
+      MenuPlate.invalidate(); // resize / DPR change: every plate is stale
+      this._lastW = Stage.w; this._lastDPR = Stage.dpr;
+    }
     const cam = this.cam;
     const pan = Math.sin(t * 0.045) * 120;
     // squad sits in the visible (non-panel) side of the composition

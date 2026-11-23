@@ -1,41 +1,38 @@
-# RELEASE NOTES — v2.3.0
+# RELEASE NOTES — v3.0.0
 
-## Main Menu — Cinematic Command Center (rebuilt)
-- Old menu removed: vertical six-button stack, oversized title, decorative
-  brandlines/status rows and menu grain are gone.
-- New composition: full-bleed cinematic hero scene (~60-70% of the screen)
-  with a compact command panel (RTL-aware, inset-inline-start) containing a
-  tight brand block, a live campaign save card (progress/next op/ready
-  soldiers/credits — real data, honest empty state), exactly three primary
-  CTAs and a compact secondary utility nav (آمار · تنظیمات · راهنما · درباره
-  سازنده).
+## Fixed (P0)
+- **CI failure — AI suppression**: a pinned, engaged enemy whose target went
+  stale collapsed straight to `patrol` (perception ran on `thinkT=0` and the
+  stale-target branch reset the state before the cover transition could fire).
+  Production fix: perception no longer downgrades a heavily-suppressed engaged
+  enemy to patrol/search; the suppression→cover transition now works from the
+  last-known position, never fakes a move when pathing fails, and falls back
+  to a controlled `retreat` when no cover exists at all. Regression tests:
+  stale-target determinism + no-cover fallback (`tests/ai.js`, 44 assertions).
+- **Commander influence radius**: `enemyConfidence()` gave a global aura to a
+  warlord anywhere on the map; now bound to a 560 px command radius (tested:
+  near/far/dead).
+- **MenuPlate cache**: keys now include viewport + DPR (resize/orientation
+  flips served stale art), strict LRU budget of 5 full-screen plates,
+  invalidation wired to resize. Tested.
 
-## Rendering
-- Hero plate cache: the expensive menu background (sky → parallax → terrain →
-  props) is pre-rendered once per camera step into an offscreen canvas (LRU
-  of 8) and blitted; only units, dust, grade and vignette render per frame.
-  Camera drift, warm ground grade and a softened vignette compose the menu
-  look. Squad repositioned into the visible composition side.
+## Art (visible changes)
+- Forest mid-layer rebuilt: individual trees — tapered trunks, crooked branch
+  clusters, layered canopy blobs with rim light, dead snags, ferns, rocks —
+  replacing repeating triangles (pixel-verified in tests).
+- Urban far skyline rebuilt: stepped setbacks, shelled/broken rooflines,
+  antenna masts, water tanks, crane arms, roof highlights.
+- Toasts: coalescing identical notifications, hard cap of three, click to
+  dismiss (they previously stacked over headings).
 
-## Fixed
-- **Version drift** (P1): GAME_VERSION was 2.1.0 while package.json said
-  2.0.0 and the menu carried a hardcoded "v1.0". Single source now:
-  GAME_VERSION = 2.3.0 = package.json = menu build label = footer.
-- **Vacuous test** (P1): the v22 diagnostics assertion (`r.visible === true || true`)
-  proved nothing; it now asserts HUD visibility, real FPS/frame-time content,
-  a plausible FPS reading and that toggling off hides the HUD.
-- **package-lock.json** added; CI switched to `npm ci` for reproducible installs.
-- Hub title/subtitle localized (عملیات‌ها) with a live Persian status suffix.
+## Version
+- Single source v3.0.0 across GAME_VERSION / package.json / build label.
+- README suite inventory corrected (18 suites) and queue capacity corrected
+  to 6 to match the implementation.
 
 ## Honest gaps
-- The image-generation service was unavailable (credential error, tried
-  twice), so the hero art is a **procedural pre-rendered plate**, not a
-  bitmap illustration. It is rendered and cached at runtime; no external
-  files. Recorded as an artistic gap, not a shipped bitmap asset.
-- Hub/barracks/arsenal dynamic strings remain partially English; the L10N
-  dictionary covers menu, commands, hub headers, results and feeds. Full
-  coverage of every dynamic template is still open work.
-
-## Tests
-17 suites, ~445 assertions, all green. New: tests/v23-acceptance.js (menu
-structure, save card, version single-source, plate cache, hub localization).
+- No bitmap art assets: the image-generation endpoint remains unavailable
+  (invalid credential); all art is procedural per docs/ART_BIBLE.md.
+- Persian localization covers menu/commands/hub/results/feeds; Barracks and
+  Arsenal dynamic strings remain partially English.
+- No physical-device (Samsung Galaxy A23) testing — Playwright emulation only.

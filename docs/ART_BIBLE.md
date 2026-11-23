@@ -57,3 +57,17 @@ PALETTE: charcoal/olive/bone + amber windows
 LIGHT: upper-left 35°, hazy depth, no pure black
 OUTPUT: 16:9 1280x720, no frame, no labels
 ```
+
+
+## Status after v3.0.0 (honest)
+- All art remains **procedural** (vector + pre-rendered plates). No bitmap
+  environment plates or sprite sheets exist in `assets/`; the image-generation
+  endpoint was unavailable (invalid credential, two attempts in v2.3). Any
+  future bitmap assets must pass the create-game-assets QA gates before
+  integration.
+- Forest mid-layer: individual trees with tapered trunks, branch clusters,
+  layered canopy blobs, dead snags, ferns, rocks (replaces triangles).
+- Urban far layer: varied skyline silhouettes (stepped tops, shelled roofs,
+  antenna masts, water tanks, crane arms, rim light).
+- Menu: full-bleed procedural hero scene with LRU plate cache (max 5
+  full-screen canvases, keyed by camera step + viewport + DPR).

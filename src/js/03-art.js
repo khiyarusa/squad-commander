@@ -107,15 +107,45 @@ const Art = (() => {
   }
 
   function drawUrbanFar(c, rng, w, h, pal) {
-    c.fillStyle = pal.far;
+    const baseY = h * 0.72;
     let x = -40;
     while (x < w + 40) {
-      const bw = 40 + rng() * 100, bh = 90 + rng() * 230;
-      const baseY = h * 0.72;
+      const bw = 44 + rng() * 100, bh = 90 + rng() * 230;
+      const top = baseY - bh;
       c.globalAlpha = 0.85;
-      c.fillRect(x, baseY - bh, bw, bh + 140);
-      if (rng() < 0.35) { c.fillRect(x + bw * 0.4, baseY - bh - 26, 3, 26); }
-      if (rng() < 0.22) { c.fillRect(x + bw * 0.2, baseY - bh - 10, bw * 0.5, 10); }
+      c.fillStyle = pal.far;
+      c.fillRect(x, top, bw, bh + 140);
+      // silhouette personality on the roofline
+      const kind = rng();
+      if (kind < 0.2) { // stepped setbacks
+        c.fillRect(x + bw * 0.18, top - 18, bw * 0.4, 18);
+        c.fillRect(x + bw * 0.3, top - 34, bw * 0.2, 16);
+      } else if (kind < 0.35) { // broken / shelled top: jagged silhouette
+        c.beginPath(); c.moveTo(x, top + 10 + rng() * 8);
+        let bx = x;
+        while (bx < x + bw) {
+          const seg = bw / 5;
+          bx += seg;
+          c.lineTo(bx - seg * 0.3, top + rng() * 14);
+          c.lineTo(bx, top + 4 + rng() * 12);
+        }
+        c.lineTo(x + bw, baseY + 140); c.lineTo(x, baseY + 140); c.closePath();
+        c.fill();
+        x += bw + 4 + rng() * 22;
+        continue;
+      } else if (kind < 0.5) { // antenna mast
+        c.fillRect(x + bw * 0.45, top - 30, 3, 30);
+        c.fillRect(x + bw * 0.38, top - 22, 10, 2);
+      } else if (kind < 0.62) { // water tank
+        c.fillRect(x + bw * 0.32, top - 20, bw * 0.3, 14);
+        c.fillRect(x + bw * 0.44, top - 6, 4, 6);
+      } else if (kind < 0.72) { // crane arm
+        c.fillRect(x + bw * 0.5, top - 40, 3, 40);
+        c.fillRect(x + bw * 0.5, top - 40, 46, 3);
+      }
+      // rooftop edge highlight
+      c.fillStyle = 'rgba(255,220,170,.08)';
+      c.fillRect(x, top, bw, 2);
       c.globalAlpha = 1;
       x += bw + 4 + rng() * 22;
     }
@@ -197,26 +227,78 @@ const Art = (() => {
   }
   function drawForestMid(c, rng, w, h, pal) {
     const baseY = h * 0.85;
+    // ground cover strip
     c.fillStyle = pal.mid;
-    for (let x = -30; x < w + 30; x += 26 + rng() * 26) {
-      const th = 110 + rng() * 220;
-      const tw = 26 + rng() * 30;
+    c.fillRect(-10, baseY - 8, w + 20, h - baseY + 20);
+    const shade = 'rgba(8,10,7,.55)';
+    const lit = pal.midLit || 'rgba(74,88,58,.9)';
+    for (let x = -30; x < w + 30;) {
+      const kind = rng();
+      const th = 130 + rng() * 230;
       const top = baseY - th;
-      // trunk
-      c.fillStyle = 'rgba(12,14,10,.9)';
-      c.fillRect(x - 2, top + th * 0.35, 5, th * 0.7);
-      // canopy triangles
-      c.fillStyle = pal.mid;
-      for (let k = 0; k < 4; k++) {
-        const yy = top + k * (th * 0.17);
-        const ww = tw * (0.55 + k * 0.22);
-        poly(c, [[x, yy], [x - ww, yy + th * 0.26], [x, yy + th * 0.17], [x + ww, yy + th * 0.26]]);
-        c.fill();
+      if (kind < 0.14) {
+        // dead bare tree: tapered trunk + crooked branches
+        const lean = (rng() - 0.5) * 0.24;
+        c.save(); c.translate(x, baseY); c.rotate(lean);
+        c.fillStyle = shade;
+        c.beginPath(); c.moveTo(-5, 0); c.quadraticCurveTo(-2, -th * 0.6, -1, -th); c.lineTo(2, -th); c.quadraticCurveTo(4, -th * 0.5, 6, 0); c.closePath(); c.fill();
+        c.strokeStyle = shade; c.lineCap = 'round';
+        for (let b = 0; b < 5; b++) {
+          const by = -th * (0.35 + b * 0.13), side = b % 2 ? 1 : -1;
+          c.lineWidth = 2.2 - b * 0.3;
+          c.beginPath(); c.moveTo(0, by); c.quadraticCurveTo(side * 12, by - 8, side * (16 + rng() * 10), by - 14 - rng() * 8); c.stroke();
+        }
+        c.restore();
+      } else if (kind < 0.55) {
+        // spruce: narrow stacked fronds with curved edges
+        const sway = (rng() - 0.5) * 6;
+        c.fillStyle = shade;
+        c.beginPath(); c.moveTo(x - 2.5, baseY); c.quadraticCurveTo(x - 1 + sway * 0.4, baseY - th * 0.5, x - 1.5 + sway, top + 10); c.lineTo(x + 1.5 + sway, top + 10); c.quadraticCurveTo(x + 1 + sway * 0.4, baseY - th * 0.5, x + 3, baseY); c.closePath(); c.fill();
+        const tiers = 5 + Math.floor(rng() * 3);
+        for (let k = 0; k < tiers; k++) {
+          const yy = top + (k / tiers) * (th * 0.8);
+          const ww = (16 + rng() * 10) * (1 - k / (tiers + 1.5));
+          c.fillStyle = k % 2 ? pal.mid : shade;
+          c.beginPath();
+          c.moveTo(x + sway * (0.3 + k / tiers), yy);
+          c.quadraticCurveTo(x - ww, yy + 10, x - ww * 0.55, yy + th * 0.16);
+          c.quadraticCurveTo(x - ww * 0.2, yy + th * 0.13, x + sway, yy + th * 0.11);
+          c.quadraticCurveTo(x + ww * 0.2, yy + th * 0.13, x + ww * 0.55, yy + th * 0.16);
+          c.quadraticCurveTo(x + ww, yy + 10, x + sway * (0.3 + k / tiers), yy);
+          c.closePath(); c.fill();
+          if (k < tiers - 1) { // moonlit/sunlit rim
+            c.fillStyle = lit; c.globalAlpha = 0.22;
+            c.beginPath(); c.moveTo(x + sway, yy - 2); c.quadraticCurveTo(x + ww * 0.4, yy + 8, x + ww * 0.22, yy + th * 0.15); c.lineTo(x + sway, yy + th * 0.1); c.closePath(); c.fill();
+            c.globalAlpha = 1;
+          }
+        }
+      } else {
+        // broad pine: trunk + canopy blob clusters
+        c.fillStyle = shade;
+        c.beginPath(); c.moveTo(x - 3, baseY); c.quadraticCurveTo(x - 1, baseY - th * 0.4, x - 2, top + th * 0.3); c.lineTo(x + 2, top + th * 0.3); c.quadraticCurveTo(x + 1, baseY - th * 0.4, x + 3.5, baseY); c.closePath(); c.fill();
+        for (let k = 0; k < 7; k++) {
+          const bx = x + (rng() - 0.5) * 34, by = top + 14 + rng() * (th * 0.5);
+          const r = 10 + rng() * 14;
+          c.fillStyle = k % 3 ? pal.mid : shade;
+          c.beginPath(); c.ellipse(bx, by, r, r * 0.72, rng() * 0.6, 0, TAU); c.fill();
+          c.fillStyle = lit; c.globalAlpha = 0.16;
+          c.beginPath(); c.ellipse(bx - r * 0.25, by - r * 0.3, r * 0.55, r * 0.32, -0.4, 0, TAU); c.fill();
+          c.globalAlpha = 1;
+        }
       }
-      if (rng() < 0.25) {
-        c.strokeStyle = 'rgba(0,0,0,.25)'; c.lineWidth = 1;
-        c.beginPath(); c.moveTo(x, top); c.lineTo(x + 6, top + 20); c.stroke();
+      // undergrowth: ferns / bushes / rocks / logs
+      const roll = rng();
+      if (roll < 0.3) {
+        c.strokeStyle = shade; c.lineWidth = 1.6; c.lineCap = 'round';
+        for (let f = 0; f < 5; f++) {
+          const fx = x + (rng() - 0.5) * 30, fh = 8 + rng() * 12;
+          c.beginPath(); c.moveTo(fx, baseY); c.quadraticCurveTo(fx + (f - 2) * 3, baseY - fh * 0.6, fx + (f - 2) * 6, baseY - fh); c.stroke();
+        }
+      } else if (roll < 0.42) {
+        c.fillStyle = 'rgba(16,18,14,.8)';
+        c.beginPath(); c.ellipse(x + 10, baseY - 4, 10 + rng() * 8, 5 + rng() * 3, 0, Math.PI, TAU); c.fill();
       }
+      x += 34 + rng() * 40;
     }
     const g = c.createLinearGradient(0, h * 0.4, 0, h);
     g.addColorStop(0, 'rgba(0,0,0,0)');

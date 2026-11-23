@@ -17,13 +17,14 @@ const h = require('./lib/harness');
         grain: !!document.querySelector('#screen-menu .grain'),
         oldActions: !!document.querySelector('.menu-actions')
       },
-      build: document.getElementById('menu-build').textContent
+      build: document.getElementById('menu-build').textContent,
+      constant: GAME_VERSION
     }));
     h.assert(r.panel && r.hero, 'new menu structure present');
     h.assert(r.ctas === 3, 'exactly three primary CTAs (got ' + r.ctas + ')');
     h.assert(r.utils === 4, 'secondary utilities in a compact nav (got ' + r.utils + ')');
     h.assert(!r.oldClutter.brandline && !r.oldClutter.oldActions && !r.oldClutter.grain, 'old clutter removed');
-    h.assert(r.build === 'BUILD 2.3.0', 'build label from single source (' + r.build + ')');
+    h.assert(r.build === 'BUILD ' + r.constant, 'build label matches GAME_VERSION (' + r.build + ')');
     await h.shot(page, 'v23-menu-final');
   });
 
@@ -41,9 +42,11 @@ const h = require('./lib/harness');
 
   await h.test('version is single-sourced across package, build and runtime', async () => {
     const r = await page.evaluate(() => GAME_VERSION);
+    const constant = await page.evaluate(() => GAME_VERSION);
     const pkg = require('../package.json');
+    h.assert(r === constant, 'runtime version stable');
     h.assert(r === pkg.version, 'GAME_VERSION (' + r + ') === package.json (' + pkg.version + ')');
-    h.assert(r === '2.3.0', 'release version 2.3.0');
+    h.assert(r === pkg.version, 'release version matches package.json');
   });
 
   await h.test('menu hero plate renders through the cache', async () => {

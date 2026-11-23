@@ -369,12 +369,17 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
       u.stateT = 0;
     }
     if (u.aiState === 'engage' && (u.suppression > 62 || u.hp < u.maxHp * 0.4) && u.stateT > 1.2) {
-      const found = findNearbyCover(this.level, u.x, u.target ? u.target.x : null, 260);
+      const threatX = u.target ? u.target.x : (u.lastSeen ? u.lastSeen.x : null);
+      const found = findNearbyCover(this.level, u.x, threatX, 260);
       if (found && Math.abs(found.x - u.x) > 8) {
         u.aiState = 'cover';
         u.coverDest = found;
-        u.path = findPath(this.level, u.x, found.x);
-        u.pathI = 0;
+        const p = findPath(this.level, u.x, found.x);
+        if (p && p.length) { u.path = p; u.pathI = 0; }
+        else { u.aiState = 'engage'; u.stateT = 1.0; } // retry shortly, never fake a move
+      } else if (u.suppression > 75) {
+        // no cover at all: controlled fallback instead of standing in the open
+        u.aiState = 'retreat';
         u.stateT = 0;
       }
     }
@@ -568,10 +573,13 @@ function angleDiff(a, b) {
 }
 
 Battle.prototype.enemyConfidence = function (u) {
-  const mates = this.enemies.filter((e) => e !== u && !e.dead);
   let nearby = 0;
-  for (const e of mates) if (Math.abs(e.x - u.x) < 520) nearby++;
-  const leader = this.enemies.some((e) => !e.dead && e.enemyType === 'commander');
+  for (const e of this.enemies) {
+    if (e === u || e.dead) continue;
+    if (Math.abs(e.x - u.x) < 520) nearby++;
+  }
+  // a warlord steadies only the hostiles within his command radius
+  const leader = this.enemies.some((e) => !e.dead && e.enemyType === 'commander' && Math.abs(e.x - u.x) < 560);
   const hp = u.hp / u.maxHp;
   let c = 0.35 + Math.min(0.3, nearby * 0.08) + (leader ? 0.15 : 0) + hp * 0.25;
   if (u.suppression > 50) c -= 0.18;
@@ -641,7 +649,13 @@ Battle.prototype.enemyPerceive = function (u) {
     const stale = this.time - (u.lastSeenT || 0);
     if (stale > 2.2 || !best) {
       u.target = null;
-      if (u.lastSeen) { u.aiState = 'search'; u.searchPts = null; u.stateT = 0; }
+      // heavy suppression while engaging: hold the engage state so the
+      // suppression->cover transition can fire; dropping to patrol here
+      // made pinned enemies wander back into the open
+      if (u.aiState === 'engage' && u.suppression > 62) {
+        if (u.lastSeen) u.aiState = 'search';
+        u.stateT = Math.max(u.stateT || 0, 1.3);
+      } else if (u.lastSeen) { u.aiState = 'search'; u.searchPts = null; u.stateT = 0; }
       else { u.aiState = 'patrol'; u.stateT = 0; }
       u.path = null;
     }
