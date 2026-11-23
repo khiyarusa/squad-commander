@@ -341,10 +341,25 @@ Object.assign(UI, {
       }
       if (!gapSet) chips[chips.length - 1] && (chips[chips.length - 1].style.borderRight = '2px solid var(--accent)');
     };
-    const up = (ev) => {
+    const cleanup = () => {
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', up);
+      document.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('blur', cancel);
+      document.removeEventListener('keydown', esc);
       ghost.remove();
+      chips.forEach((el) => { el.style.borderLeft = ''; el.style.borderRight = ''; el.style.opacity = ''; });
+      this._qdrag = false;
+    };
+    let cancelled = false;
+    const cancel = () => { cancelled = true; cleanup(); };
+    const esc = (ev) => { if (ev.key === 'Escape') cancel(); };
+    document.addEventListener('pointercancel', cancel);
+    window.addEventListener('blur', cancel);
+    document.addEventListener('keydown', esc);
+    const up = (ev) => {
+      if (cancelled) return;
+      cleanup();
       const x = ev.clientX ?? (ev.changedTouches && ev.changedTouches[0].clientX);
       let to = chips.length;
       for (let i = 0; i < chips.length; i++) {
@@ -353,7 +368,6 @@ Object.assign(UI, {
         const r = el.getBoundingClientRect();
         if (x <= r.left + r.width / 2) { to = i > from ? i - 1 : i; break; }
       }
-      chips.forEach((el) => { el.style.borderLeft = ''; el.style.borderRight = ''; el.style.opacity = ''; });
       const unit = this.battle && this.battle.selectedUnits[0];
       if (unit && to !== from && to >= 0 && to <= unit.queue.length) {
         const q = unit.queue.splice(from, 1)[0];

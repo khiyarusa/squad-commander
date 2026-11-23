@@ -368,7 +368,8 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
       u.aiState = 'engage';
       u.stateT = 0;
     }
-    if (u.aiState === 'engage' && (u.suppression > 62 || u.hp < u.maxHp * 0.4) && u.stateT > 1.2) {
+    const pinned = u.aiState === 'engage' || (u.aiState === 'search' && u.suppression > 62);
+    if (pinned && (u.suppression > 62 || u.hp < u.maxHp * 0.4) && u.stateT > 1.2) {
       const threatX = u.target ? u.target.x : (u.lastSeen ? u.lastSeen.x : null);
       const found = findNearbyCover(this.level, u.x, threatX, 260);
       if (found && Math.abs(found.x - u.x) > 8) {
@@ -398,7 +399,12 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
     }
     if (u.aiState === 'cover' && (!u.path || u.pathI >= u.path.length)) {
       u.stance = 'crouch';
-      if (u.coverDest) { u.coverId = u.coverDest.cover.id; u.x = Math.max(u.x, u.coverDest.x - 3); u.y = this.level.surfaceAt(u.x); }
+      if (u.coverDest) {
+        u.coverId = u.coverDest.cover.id;
+        const dx = u.x - u.coverDest.x;
+        if (Math.abs(dx) < 40) u.x = u.coverDest.x + Math.sign(dx || 1) * (u.coverDest.cover.w / 2 + 4);
+        u.y = this.level.surfaceAt(u.x);
+      }
       u.aiState = 'engage';
       u.stateT = 0;
     }
@@ -579,7 +585,8 @@ Battle.prototype.enemyConfidence = function (u) {
     if (Math.abs(e.x - u.x) < 520) nearby++;
   }
   // a warlord steadies only the hostiles within his command radius
-  const leader = this.enemies.some((e) => !e.dead && e.enemyType === 'commander' && Math.abs(e.x - u.x) < 560);
+  const leader = this.enemies.some((e) => !e.dead && e.enemyType === 'commander' &&
+    Math.hypot(e.x - u.x, (e.y - u.y) * 1.2) < 560);
   const hp = u.hp / u.maxHp;
   let c = 0.35 + Math.min(0.3, nearby * 0.08) + (leader ? 0.15 : 0) + hp * 0.25;
   if (u.suppression > 50) c -= 0.18;
@@ -613,12 +620,15 @@ Battle.prototype.enemyPerceive = function (u) {
   }
   if (!sawAny) u.awareness = clamp((u.awareness || 0) - 0.13, 0, 1);
 
-  // hearing: gunfire and explosions draw attention even through cover
-  let heard = null;
+  // hearing: score ALL audible events — closest/loudest wins, not array order
+  let heard = null, heardScore = -1;
   for (const n of this.noise || []) {
     if (n.team === 'enemy') continue;
     const d = Math.hypot(n.x - u.x, (n.y - u.y) * 1.6);
-    if (d < n.r) { heard = n; break; }
+    if (d >= n.r) continue;
+    const age = clamp(1 - (this.time - n.t) / 4, 0, 1);
+    const score = (1 - d / n.r) * (n.r / 900) * age;
+    if (score > heardScore) { heardScore = score; heard = n; }
   }
   if (heard && (!best || u.awareness < 0.6)) {
     u.awareness = clamp((u.awareness || 0) + 0.4, 0, 1);
@@ -660,7 +670,14 @@ Battle.prototype.enemyPerceive = function (u) {
       u.path = null;
     }
   }
-  if (u.target && u.target.dead) { u.target = null; u.aiState = 'patrol'; u.stateT = 0; }
+  if (u.target && u.target.dead) {
+    u.target = null;
+    // a dead target does not erase the tactical reaction to sustained fire
+    if (u.suppression > 62 && (u.aiState === 'engage' || u.aiState === 'alert')) {
+      u.aiState = 'engage';
+      u.stateT = Math.max(u.stateT || 0, 1.3);
+    } else { u.aiState = 'patrol'; u.stateT = 0; }
+  }
   // confidence drives aggression and retreat
   u.confidence = this.enemyConfidence(u);
 };
@@ -672,7 +689,8 @@ Battle.prototype.enemyCoord = function (u) {
   if (boss) {
     for (const e of this.enemies) {
       if (e === boss || e.dead) continue;
-      if (Math.abs(e.x - boss.x) < 560) {
+      // 2D distance: tiers/vertical separation break the command link
+      if (Math.hypot(e.x - boss.x, (e.y - boss.y) * 1.2) < 560) {
         e.commanderBuff = true;
         e.react = Math.max(0.6, e.react * 0.998);
         if (this.time % 4 < 0.2 && e.aiState === 'patrol' && u.alertPos) {
@@ -682,6 +700,9 @@ Battle.prototype.enemyCoord = function (u) {
         }
       } else e.commanderBuff = false;
     }
+  } else {
+    // no living commander: every stale buff must clear immediately
+    for (const e of this.enemies) if (e.commanderBuff) e.commanderBuff = false;
   }
   // assign tactical roles: heavies pin, fast units flank, rest hold the line
   for (const e of this.enemies) {
@@ -692,8 +713,11 @@ Battle.prototype.enemyCoord = function (u) {
   }
   const workers = this.enemies.filter((e) => !e.dead && e.aiState !== 'patrol' && e.lastSeen);
   if (!workers.length) return;
-  const lead = workers[0];
-  if (!lead) return;
+  // share the sighting closest to THIS unit — never a distant group's intel
+  let lead = workers[0];
+  for (const w of workers) {
+    if (Math.abs(w.lastSeen.x - u.x) < Math.abs(lead.lastSeen.x - u.x)) lead = w;
+  }
   const coord = this.diff ? this.diff.enemyCoord : 1;
   for (const e of this.enemies) {
     if (e.dead || e === u || e.aiState === 'engage') continue;

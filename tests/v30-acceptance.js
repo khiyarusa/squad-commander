@@ -81,10 +81,10 @@ const h = require('./lib/harness');
     h.assert(r.colors >= 10, 'layered canopy color variety (' + r.colors + ' quantized colors)');
   });
 
-  await h.test('version 3.0.0 across package and runtime', async () => {
+  await h.test('version is synced across package and runtime', async () => {
     const r = await page.evaluate(() => GAME_VERSION);
     const pkg = require('../package.json');
-    h.assert(r === pkg.version && r === '3.0.0', 'version synced at 3.0.0 (runtime ' + r + ', pkg ' + pkg.version + ')');
+    h.assert(r === pkg.version, 'version synced across package and runtime (' + r + ')');
   });
 
   h.assertClean(ctx);

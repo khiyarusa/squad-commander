@@ -65,9 +65,15 @@ const UI = {
     wrap.appendChild(el);
     const life = setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 2600);
     el._life = life;
-    // hard cap: mission-critical kinds push ordinary ones out
-    while (wrap.children.length > 3) wrap.firstChild.remove();
     el.addEventListener('click', () => { clearTimeout(el._life); el.remove(); });
+    // severity-aware cap: a critical toast never evicts another critical one —
+    // the oldest informational toast goes first
+    const sev = (el2) => (el2.classList.contains('bad') ? 2 : el2.classList.contains('warn') ? 1 : 0);
+    while (wrap.children.length > 3) {
+      let victim = wrap.firstElementChild, vs = sev(victim);
+      for (const child of wrap.children) { const s2 = sev(child); if (s2 < vs) { victim = child; vs = s2; } }
+      clearTimeout(victim._life); victim.remove();
+    }
   },
   show(name) {
     if (typeof App !== 'undefined' && App.scene === 'battle' && name !== 'results' && name !== 'settings' && name !== 'help') {

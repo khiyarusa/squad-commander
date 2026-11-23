@@ -648,12 +648,28 @@ function drawGrain(ctx, W, H, t) {
    camera step and reused — richer detail affordable at near-zero cost ---- */
 const MenuPlate = {
   cache: new Map(),
-  step: 30,
-  maxEntries: 5, // bounded memory: 5 full-screen plates max
+  maxEntries: 6, // bounded by BOTH count and byte budget
+  stepX: 30,
+  // numeric snap for Canvas transforms — NEVER derive it from the string key
+  snapX(cam) { return Math.round(cam.x / this.stepX) * this.stepX; },
+  snapY(cam) { return Math.round(cam.y / this.stepY) * this.stepY; },
+  stepY: 20,
   key(cam) {
-    // the plate content depends on camera X step AND viewport + DPR;
+    // the plate content depends on camera X/Y steps AND viewport + DPR;
     // anything else silently serves stale art after a resize/orientation flip
-    return Math.round(cam.x / this.step) + '|' + Stage.w + 'x' + Stage.h + '@' + Stage.dpr;
+    return this.snapX(cam) + ',' + this.snapY(cam) + '|' + Stage.w + 'x' + Stage.h + '@' + Stage.dpr;
+  },
+  budgetBytes: 96 * 1024 * 1024, // ~96 MB of plate memory on the menu
+  usedBytes: 0,
+  plateBytes(cv) { return cv.width * cv.height * 4; },
+  evictIfNeeded() {
+    while (this.usedBytes > this.budgetBytes || this.cache.size >= this.maxEntries) {
+      let oldest = null, ot = Infinity;
+      for (const [key, val] of this.cache) if (val.at < ot) { ot = val.at; oldest = key; }
+      if (oldest == null) break;
+      this.usedBytes -= this.plateBytes(this.cache.get(oldest).cv);
+      this.cache.delete(oldest);
+    }
   },
   get(cam, level, t) {
     const k = this.key(cam);
@@ -664,16 +680,11 @@ const MenuPlate = {
       cv.height = Math.ceil(Stage.h * Stage.dpr);
       const c = cv.getContext('2d');
       c.scale(Stage.dpr, Stage.dpr);
-      const snap = Object.assign({}, cam, { x: Math.round(cam.x / this.step) * this.step, shakeX: 0, shakeY: 0, shake: 0 });
+      const snap = Object.assign({}, cam, { x: this.snapX(cam), y: this.snapY(cam), shakeX: 0, shakeY: 0, shake: 0 });
       drawMenuBackdrop(c, level, snap, 12.3, { units: null });
       entry = { cv, at: performance.now() };
-      // LRU eviction with a strict budget
-      while (this.cache.size >= this.maxEntries) {
-        let oldest = null, ot = Infinity;
-        for (const [key, val] of this.cache) if (val.at < ot) { ot = val.at; oldest = key; }
-        if (oldest == null) break;
-        this.cache.delete(oldest);
-      }
+      this.usedBytes += this.plateBytes(cv);
+      this.evictIfNeeded();
       this.cache.set(k, entry);
     } else entry.at = performance.now();
     return entry.cv;
@@ -735,17 +746,20 @@ const MenuScene = {
     const pan = Math.sin(t * 0.045) * 120;
     // squad sits in the visible (non-panel) side of the composition
     cam.x = 1760 + pan * 0.6;
-    cam.y = 400 + Math.sin(t * 0.03) * 14;
+    cam.y = 452 + Math.sin(t * 0.03) * 10;
     // 1) cached background plate (sky→props) for the snapped camera step
     const plate = MenuPlate.get(cam, this.level, t);
     ctx.setTransform(Stage.dpr, 0, 0, Stage.dpr, 0, 0);
-    const drift = ((cam.x % MenuPlate.step) / MenuPlate.step) * MenuPlate.step * 0.1; // subtle inner drift
-    ctx.drawImage(plate, -drift * Stage.dpr, 0, plate.width / Stage.dpr + 2, plate.height / Stage.dpr);
-    // 2) live layer: units only, using the same snapped camera
-    const snap = Object.assign({}, cam, { x: MenuPlate.key(cam) * MenuPlate.step, shakeX: 0, shakeY: 0, shake: 0 });
+    const snappedX = MenuPlate.snapX(cam);
+    const drift = ((cam.x - snappedX) / MenuPlate.stepX) * 1.5; // subtle inner drift (CSS px)
+    ctx.drawImage(plate, -drift, 0, plate.width / Stage.dpr + 2, plate.height / Stage.dpr);
+    // 2) live layer: units use the SAME numeric snap as the plate background
+    const snap = Object.assign({}, cam, { x: snappedX, y: MenuPlate.snapY(cam), shakeX: 0, shakeY: 0, shake: 0 });
     Stage.apply(ctx, snap);
     const view = Stage.viewFor(snap);
-    for (const u of this.units) Art.drawUnit(ctx, u, t);
+    // hero-scale presentation: menu-only units render larger (no gameplay
+    // hitbox/muzzle coupling to worry about in this read-only scene)
+    for (const u of this.units) Art.drawUnit(ctx, u, t, { scale: 1.7 });
     ctx.setTransform(Stage.dpr, 0, 0, Stage.dpr, 0, 0);
     const pal = this.level.paletteData;
     drawMenuDust(ctx, Stage.w, Stage.h, t, pal);
