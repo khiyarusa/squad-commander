@@ -634,7 +634,7 @@ Battle.prototype.enemyPerceive = function (u) {
       u.reactT = Math.max(u.reactT || 0, (0.18 + Math.random() * 0.3) * (u.react || 1));
       if (wasPassive && !u.contacted) {
         u.contacted = true;
-        this.addFeed('CONTACT — ' + (u.enemyName || 'hostile') + (Math.abs(best.x - u.x) < 220 ? ' — CLOSE' : ''), 'warn');
+        this.addFeed(L10N.t('feats.contact') + ' — ' + (u.enemyName || 'hostile') + (Math.abs(best.x - u.x) < 220 ? ' — CLOSE' : ''), 'warn');
       }
     }
   } else if (u.target) {

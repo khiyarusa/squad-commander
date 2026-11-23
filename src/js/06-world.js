@@ -588,18 +588,39 @@ function validateLevelReachability(level) {
   const starts = level.deploySlots.map((s) => nearestNavNode(level, s.x, s.y)).filter(Boolean);
   let seen = reachableNodes(level, starts);
   const unreachable = [];
+  const unreachableTargets = [];
   for (const t of targets) {
     const n = nearestNavNode(level, t.x, t.y);
-    if (!n || !seen[n.i]) unreachable.push(t.label);
+    if (!n || !seen[n.i]) { unreachable.push(t.label); unreachableTargets.push({ x: t.x, y: t.y, label: t.label }); }
   }
   let removed = 0;
   if (unreachable.length) {
-    // destroy non-vaultable barriers that sit between deploy and the target
-    for (const cov of level.covers) {
-      if (cov.dead || !cov.solid || cov.vaultable) continue;
-      cov.dead = true;
-      cov.destroyedByNav = true;
-      removed++;
+    // localized recovery: for each unreachable target, carve ONLY the solid
+    // non-vaultable props that actually block the straight corridor from the
+    // nearest deploy point — never the whole level's cover layout
+    for (const t of unreachableTargets) {
+      const tn = nearestNavNode(level, t.x, t.y);
+      if (!tn) continue;
+      const sn = nearestNavNode(level, level.deploySlots[0] ? level.deploySlots[0].x : t.x, level.deploySlots[0] ? level.deploySlots[0].y : t.y);
+      if (!sn) continue;
+      let guard = 0;
+      while (guard++ < 6) {
+        // is it reachable now?
+        const seenNow = reachableNodes(level, level.deploySlots.map((s) => nearestNavNode(level, s.x, s.y)).filter(Boolean));
+        if (seenNow[tn.i]) break;
+        // nearest blocking solid on the straight corridor
+        let blocker = null, bt = Infinity;
+        for (const cov of level.covers) {
+          if (cov.dead || !cov.solid || cov.vaultable) continue;
+          const hit = rayRectT(sn.x, sn.y - 20, tn.x, tn.y - 20, coverRect(cov));
+          if (hit != null && hit > 0.001 && hit < bt) { bt = hit; blocker = cov; }
+        }
+        if (!blocker) break; // geometry does not explain it — report, don't destroy
+        blocker.dead = true;
+        blocker.destroyedByNav = true;
+        removed++;
+        buildNavGraph(level);
+      }
     }
     if (removed) {
       buildNavGraph(level);

@@ -30,6 +30,22 @@ function boot() {
   requestAnimationFrame(frame);
 }
 
+function updatePerfHud(b) {
+  const el = document.getElementById('perf-hud');
+  if (!el) return;
+  const on = Campaign.settings && Campaign.settings.diagnostics;
+  el.style.display = on ? 'block' : 'none';
+  if (!on) return;
+  const avg = App.ft && App.ft.length ? (App.ft.reduce((a, v) => a + v, 0) / App.ft.length).toFixed(1) : '?';
+  const lines = ['FPS ~' + (App.ft && App.ft.length ? Math.round(1000 / Math.max(1, App.ft.reduce((a, v) => a + v, 0) / App.ft.length)) : 0),
+    'frame ' + avg + ' ms'];
+  if (b) {
+    lines.push('units ' + b.units.length, 'AI ' + (b.enemies.filter((e) => !e.dead).length),
+      'proj ' + b.projectiles.length, 'fx ' + b.particles.list.length);
+  }
+  el.textContent = lines.join('\n');
+}
+
 function frame(ts) {
   const dt = App.last ? Math.min(0.06, (ts - App.last) / 1000) : 0.016;
   const dms = App.last ? ts - App.last : 16;
@@ -56,6 +72,7 @@ function frame(ts) {
       UI.battle.update(dt);
       UI.battle.render();
       AudioSys.updateMusic(dt, true);
+      updatePerfHud(UI.battle);
     } catch (e) {
       console.error('battle render error', e);
     }

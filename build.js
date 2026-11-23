@@ -10,7 +10,9 @@ function b64(p) { return fs.readFileSync(path.join(root, p)).toString('base64');
 const fonts = [
   ['Barlow Condensed', 400, 'assets/fonts/barlow-condensed-400.woff2'],
   ['Barlow Condensed', 600, 'assets/fonts/barlow-condensed-600.woff2'],
-  ['Barlow Condensed', 800, 'assets/fonts/barlow-condensed-800.woff2']
+  ['Barlow Condensed', 800, 'assets/fonts/barlow-condensed-800.woff2'],
+  ['Vazirmatn', 400, 'assets/fonts/vazirmatn-400.woff2'],
+  ['Vazirmatn', 700, 'assets/fonts/vazirmatn-700.woff2']
 ];
 let fontCss = '';
 for (const [family, weight, file] of fonts) {

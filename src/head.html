@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -31,11 +31,12 @@
         <h1 class="menu-title"><span>SQUAD</span><span class="l2">COMMANDER</span></h1>
         <p class="menu-tag">Six soldiers. One commander. Plan, pause, and press the assault &mdash; a real-time tactical squad game fought across nine hostile kilometres.</p>
         <div class="menu-actions">
-          <button class="btn btn--primary" data-act="continue">Continue Campaign <span class="key" id="menu-continue-note">AUTO</span></button>
-          <button class="btn" data-act="new">New Campaign</button>
-          <button class="btn" data-act="barracks">Barracks</button>
+          <button class="btn btn--primary" data-act="continue"><span data-i18n="menu.continue">ادامه</span> <span class="key" id="menu-continue-note">AUTO</span></button>
+          <button class="btn" data-act="new" data-i18n="menu.new">عملیات جدید</button>
+          <button class="btn" data-act="barracks" data-i18n="menu.barracks">پادگان</button>
           <button class="btn" data-act="settings">Settings</button>
           <button class="btn btn--ghost" data-act="help">Controls &amp; Field Manual</button>
+          <button class="btn btn--ghost" data-act="credits" data-i18n="menu.credits">درباره سازنده</button>
         </div>
       </div>
       <div class="menu-side" id="menu-side"></div>
@@ -308,7 +309,19 @@
       <div class="screen-body">
         <div class="settings-grid">
           <div class="panel">
-            <h4>Audio</h4>
+            <h4 data-i18n="set.language">زبان / Language</h4>
+            <div class="setting">
+              <div><div class="s-lab">زبان رابط کاربری / UI Language</div><div class="s-desc">فارسی پیش‌فرض است / Persian by default</div></div>
+              <div class="s-ctl">
+                <select class="sel" id="set-lang">
+                  <option value="fa">فارسی</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h4 data-i18n="set.master">صدا</h4>
             <div class="setting">
               <div><div class="s-lab">Master volume</div><div class="s-desc">All game audio</div></div>
               <div class="s-ctl"><input type="range" id="set-master" min="0" max="100" value="85"><span class="squad-count" id="val-master">85</span></div>
@@ -323,7 +336,11 @@
             </div>
           </div>
           <div class="panel">
-            <h4>Presentation</h4>
+            <h4 data-i18n="set.quality">کیفیت و نمایش</h4>
+            <div class="setting">
+              <div><div class="s-lab" data-i18n="set.diagnostics">نمایش کارایی</div><div class="s-desc">FPS، زمان فریم، موجودیت‌ها</div></div>
+              <button class="tgl" data-toggle="diagnostics" id="set-diagnostics" aria-label="performance hud"></button>
+            </div>
             <div class="setting">
               <div><div class="s-lab">Visual quality</div><div class="s-desc">Particles, weather, grain</div></div>
               <div class="s-ctl">
@@ -378,9 +395,37 @@
       <div class="screen-foot">
         <button class="btn btn--ghost" id="btn-settings-back">&larr; Back</button>
         <div class="spacer"></div>
+
+        <div id="perf-hud" style="position:fixed;left:8px;bottom:calc(150px + var(--safe-b));z-index:40;font:10px/1.5 var(--font-body);color:#9fd08a;background:rgba(8,11,7,.8);border:1px solid var(--line);padding:4px 8px;display:none;pointer-events:none;white-space:pre"></div>
         <span class="squad-count" id="footer-version"></span>
       </div>
       <div class="grain"></div>
+    </section>
+    <section id="screen-credits" class="screen dark">
+      <div class="screen-head">
+        <div>
+          <div class="screen-kicker">SQUAD COMMANDER</div>
+          <h2 class="screen-title" data-i18n="credits.title">درباره سازنده</h2>
+        </div>
+      </div>
+      <div class="screen-body credits-body">
+        <div class="credits-card">
+          <div class="credits-name" data-i18n="credits.made">ساخته‌شده توسط Amin</div>
+          <div class="credits-rows">
+            <a class="credits-row" href="https://t.me/Mozrd" target="_blank" rel="noopener">
+              <span class="credits-label" data-i18n="credits.telegram">تلگرام</span>
+              <span class="credits-handle">@Mozrd</span>
+            </a>
+            <a class="credits-row" href="https://rubika.ir/angosht0" target="_blank" rel="noopener">
+              <span class="credits-label" data-i18n="credits.rubika">روبیکا</span>
+              <span class="credits-handle">@angosht0</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn" data-act="menu" data-i18n="menu.build">بازگشت</button>
+      </div>
     </section>
 
     <!-- ============ HELP ============ -->

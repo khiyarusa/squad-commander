@@ -398,7 +398,7 @@ Battle.prototype.downUnit = function (u, ownerId) {
   u.reviveProg = 0;
   this.stats.alliesDowned++;
   if (u.team === 'ally') {
-    this.addFeed(`${u.callsign || u.name} IS DOWN — ${Math.ceil(u.downT)}s`, 'warn');
+    this.addFeed(`${u.callsign || u.name} ${L10N.t('feats.down')} — ${Math.ceil(u.downT)}s`, 'warn');
     AudioSys.radio('alarm');
     CameraUtil.shake(this.cam, 4);
     if (u.role === 'commander') {

@@ -101,7 +101,7 @@ Object.assign(UI, {
   },
 
   buildCommandDeck(battle) {
-    const mk = (d, secondary) => `<button class="cmd ${secondary ? 'cmd--secondary' : ''}" data-cmd="${d.id}" title="${esc(d.hint)}">${icon(d.ico)}<span class="cl">${esc(d.label)}</span></button>`;
+    const mk = (d, secondary) => `<button class="cmd ${secondary ? 'cmd--secondary' : ''}" data-cmd="${d.id}" title="${esc(d.hint)}">${icon(d.ico)}<span class="cl">${esc(L10N.t('battle.' + d.id) !== 'battle.' + d.id ? L10N.t('battle.' + d.id) : d.label)}</span></button>`;
     const p = $('#cmd-primary');
     const s = $('#cmd-secondary');
     if (p) p.innerHTML = CMD_DEFS.primary.map((d) => mk(d)).join('');

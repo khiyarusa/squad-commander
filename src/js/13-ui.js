@@ -140,6 +140,7 @@ const UI = {
         else if (a === 'help') this.openHelp();
         else if (a === 'menu') this.show('menu');
         else if (a === 'stats') this.show('stats');
+        else if (a === 'credits') this.show('credits');
         return;
       }
       const pauseAct = e.target.closest('[data-pause-act]');
@@ -809,6 +810,8 @@ const UI = {
     setRange('set-cam', 'camSens', 'val-cam', (v) => v / 100);
     const q = $('#set-quality');
     if (q) q.addEventListener('change', () => { Campaign.settings.quality = q.value; this.applySettings(false); this.saveSettings(); });
+    const langSel = $('#set-lang');
+    if (langSel) langSel.addEventListener('change', () => { L10N.setLang(langSel.value); this.saveSettings(); AudioSys.ui('confirm'); });
     $$('[data-toggle]').forEach((el) => {
       el.addEventListener('click', () => {
         const key = el.dataset.toggle;
@@ -935,6 +938,10 @@ const UI = {
     lab('cam', Math.round((s.camSens || 1) * 100));
     const q = $('#set-quality');
     if (q) q.value = s.quality;
+    const lang = $('#set-lang');
+    if (lang) lang.value = L10N.lang;
+    const diag = $('#set-diagnostics');
+    if (diag) diag.classList.toggle('on', !!s.diagnostics);
     $$('[data-toggle]').forEach((el) => el.classList.toggle('on', !!s[el.dataset.toggle]));
     this.setRes('settings-resources');
   },

@@ -827,18 +827,29 @@ class Battle {
     const ny = u.y + dy * k;
     u.x = nx; u.y = ny;
     // stall guard: pinned against a bound/obstacle with a waypoint still
-    // ahead — force-advance so support orders can fail honestly instead of
-    // idling forever (movement clamp, geometry, crowd wedges)
+    // ahead — force-advance ONLY when the direct line to the next waypoint
+    // is actually clear; otherwise keep the stall (support-order reach and
+    // path-retry counters will fail the command honestly)
     if (step > 0.001 && Math.abs(nx - ox) < 0.02 && Math.abs(ny - oy) < 0.02) {
       u.stallT = (u.stallT || 0) + dt;
       if (u.stallT > 0.6) {
         u.stallT = 0;
-        u.pathI++;
-        if (u.pathI >= u.path.length) {
-          u.path = null; u.moving = false;
-          const fl = this.level.floorAt(u.x, u.y);
-          u.y = fl.y;
-          return true;
+        const nxt = u.path[u.pathI + 1];
+        const canBypass = !nxt || walkClear(this.level, u.x, u.y, nxt.x, nxt.y);
+        if (canBypass) {
+          u.pathI++;
+          if (u.pathI >= u.path.length) {
+            u.path = null; u.moving = false;
+            const fl = this.level.floorAt(u.x, u.y);
+            u.y = fl.y;
+            return true;
+          }
+        } else {
+          // genuinely walled in — invalidate the path so the order layer can
+          // repath or fail; never silently walk through the obstacle
+          u.path = null;
+          u.stalled = true;
+          return false;
         }
         return false;
       }
@@ -1297,7 +1308,7 @@ class Battle {
     this.paused = false;
     this.cam.follow = this.pickFocusUnit();
     AudioSys.setTension(0);
-    this.addFeed(this.result.success ? 'MISSION COMPLETE' : 'MISSION FAILED', this.result.success ? 'good' : 'warn');
+    this.addFeed(this.result.success ? L10N.t('results.complete') : L10N.t('results.failed'), this.result.success ? 'good' : 'warn');
     if (this.result.success) AudioSys.radio('confirm'); else AudioSys.radio('alarm');
     const self = this;
     setTimeout(() => {

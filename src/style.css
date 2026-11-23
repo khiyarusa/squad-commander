@@ -29,7 +29,24 @@
   --safe-b:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box}
-html,body{
+html,
+/* ---- Persian / RTL ---- */
+html[dir="rtl"] body{font-family:Vazirmatn, 'Barlow Condensed', sans-serif}
+html[dir="rtl"] .screen-title,html[dir="rtl"] .screen-sub,html[dir="rtl"] .s-lab,html[dir="rtl"] .s-desc,
+html[dir="rtl"] .btn,html[dir="rtl"] .setting,html[dir="rtl"] .panel h4{font-family:Vazirmatn,'Barlow Condensed',sans-serif}
+html[dir="rtl"] .screen{direction:rtl}
+html[dir="rtl"] .screen-head,html[dir="rtl"] .screen-foot,html[dir="rtl"] .settings-grid{direction:rtl;text-align:right}
+html[dir="rtl"] .btn{letter-spacing:0}
+html[dir="rtl"] .hud-meta,html[dir="rtl"] #hud,html[dir="rtl"] .squad-strip{direction:ltr} /* battlefield HUD stays LTR for spatial consistency */
+.credits-body{display:flex;align-items:center;justify-content:center}
+.credits-card{background:rgba(12,16,10,.85);border:1px solid var(--line-strong);padding:26px 34px;min-width:320px;text-align:center}
+.credits-name{font-size:19px;font-weight:700;letter-spacing:.04em;margin-bottom:16px}
+.credits-rows{display:flex;flex-direction:column;gap:10px}
+.credits-row{display:flex;justify-content:space-between;gap:24px;padding:10px 14px;border:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.credits-row:hover{border-color:var(--accent);background:rgba(227,166,63,.06)}
+.credits-label{font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.credits-handle{font-weight:700;color:var(--accent);direction:ltr}
+body{
   margin:0;height:100%;background:var(--bg);color:var(--ink);
   font-family:var(--font-cond);overflow:hidden;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
