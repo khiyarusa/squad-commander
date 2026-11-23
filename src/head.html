@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070906">
+<meta name="description" content="SQUAD COMMANDER — a tactical squad management game. One file, fully offline.">
+<title>SQUAD COMMANDER</title>
+<style id="app-style">/*__CSS__*/</style>
+</head>
+<body>
+<div id="rotate" class="rotate" aria-hidden="true">
+  <div class="in">
+    <div class="phone"></div>
+    <h3>ROTATE DEVICE</h3>
+    <p>SQUAD COMMANDER is built for landscape. Turn your phone sideways to deploy.</p>
+  </div>
+</div>
+<div id="app">
+  <canvas id="stage" aria-label="Tactical battlefield"></canvas>
+  <div id="ui">
+
+    <!-- ============ MAIN MENU ============ -->
+    <section id="screen-menu" class="screen screen--menu is-active">
+      <div class="menu-top">
+        <div class="menu-brandline"><b>■</b> FIELD COMMAND SYSTEM <span>v1.0</span></div>
+        <div class="menu-brandline">TASK FORCE <b>NIGHTJAR</b></div>
+      </div>
+      <div class="menu-main">
+        <div class="kicker">Tactical squad operations</div>
+        <h1 class="menu-title"><span>SQUAD</span><span class="l2">COMMANDER</span></h1>
+        <p class="menu-tag">Six soldiers. One commander. Plan, pause, and press the assault &mdash; a real-time tactical squad game fought across nine hostile kilometres.</p>
+        <div class="menu-actions">
+          <button class="btn btn--primary" data-act="continue">Continue Campaign <span class="key" id="menu-continue-note">AUTO</span></button>
+          <button class="btn" data-act="new">New Campaign</button>
+          <button class="btn" data-act="barracks">Barracks</button>
+          <button class="btn" data-act="settings">Settings</button>
+          <button class="btn btn--ghost" data-act="help">Controls &amp; Field Manual</button>
+        </div>
+      </div>
+      <div class="menu-side" id="menu-side"></div>
+      <div class="menu-footer">
+        <div><span class="dot"></span>SQUAD COMMANDER &mdash; OFFLINE TACTICAL SIMULATION</div>
+        <div id="menu-build">BUILD 1.0.0</div>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <!-- ============ NEW CAMPAIGN ============ -->
+    <section id="screen-newgame" class="screen dark">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Task force nightjar</div>
+          <h2 class="screen-title">New Campaign</h2>
+          <div class="screen-sub">Select an operational difficulty. Difficulty changes enemy reaction speed, accuracy, perception and coordination &mdash; never their health alone.</div>
+        </div>
+        <div class="resources" id="newgame-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="settings-grid" id="difficulty-cards"></div>
+        <div class="panel" style="margin-top:14px">
+          <h4>Campaign briefing</h4>
+          <p class="result-note" style="margin:0">Twelve operations across the Ashen District, Blackpine forest and the Ironworks foundry. Your soldiers earn experience, carry wounds between missions, and do not come back from the dead. New campaigns overwrite the active save file.</p>
+        </div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" data-act="menu">&larr; Main Menu</button>
+        <div class="spacer"></div>
+        <button class="btn btn--primary" id="btn-start-campaign">Deploy Task Force</button>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <!-- ============ HUB ============ -->
+    <section id="screen-hub" class="screen">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Base of operations</div>
+          <h2 class="screen-title">Operations</h2>
+          <div class="screen-sub" id="hub-sub">Task Force Nightjar &mdash; ready for tasking</div>
+        </div>
+        <div class="resources" id="hub-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="hub-tabs" id="hub-tabs">
+          <button class="hub-tab is-active" data-nav="hub">Operations</button>
+          <button class="hub-tab" data-nav="barracks">Barracks</button>
+          <button class="hub-tab" data-nav="arsenal">Arsenal</button>
+          <button class="hub-tab" data-nav="stats">Service Record</button>
+          <button class="hub-tab" data-nav="settings">Settings</button>
+        </div>
+        <div id="region-grid" class="region-grid"></div>
+        <div class="hub-bottom">
+          <div class="hub-panel">
+            <h4>Squad Status</h4>
+            <div class="roster-mini" id="hub-roster"></div>
+          </div>
+          <div class="hub-panel">
+            <h4>Field Notes</h4>
+            <div id="hub-notes" class="result-note"></div>
+          </div>
+        </div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" data-act="menu">&larr; Main Menu</button>
+        <div class="squad-count" id="hub-footer-info"></div>
+        <div class="btn-row">
+          <button class="btn btn--sm" data-act="help">Field Manual</button>
+          <button class="btn btn--sm" data-act="settings">Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ BRIEFING ============ -->
+    <section id="screen-briefing" class="screen dark">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker" id="brief-kicker">Mission briefing</div>
+          <h2 class="screen-title" id="brief-heading">Operation</h2>
+          <div class="screen-sub" id="brief-sub"></div>
+        </div>
+        <div class="resources" id="brief-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="brief-grid">
+          <div class="brief-main" id="brief-content"></div>
+          <div class="brief-side">
+            <div class="panel" style="display:flex;flex-direction:column;min-height:0;margin:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <h4 style="margin:0">Deployment</h4>
+                <span class="squad-count" id="brief-count">0 / 6</span>
+              </div>
+              <div class="deploy-wrap" id="brief-squad"></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;border-top:1px solid var(--line);padding-top:8px">
+                <span class="squad-count" id="brief-cost">AMMO COST 0</span>
+                <span class="squad-count" id="brief-eta"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" id="btn-brief-back">&larr; Operations</button>
+        <div class="spacer"></div>
+        <button class="btn btn--primary" id="btn-deploy">Deploy Squad &rarr;</button>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <!-- ============ BARRACKS ============ -->
+    <section id="screen-barracks" class="screen">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Personnel</div>
+          <h2 class="screen-title">Barracks</h2>
+          <div class="screen-sub">Roster, wounds and specialisations. Injured soldiers recover between operations.</div>
+        </div>
+        <div class="resources" id="barracks-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="hub-tabs">
+          <button class="hub-tab" data-nav="hub">Operations</button>
+          <button class="hub-tab is-active" data-nav="barracks">Barracks</button>
+          <button class="hub-tab" data-nav="arsenal">Arsenal</button>
+          <button class="hub-tab" data-nav="stats">Service Record</button>
+          <button class="hub-tab" data-nav="settings">Settings</button>
+        </div>
+        <div class="roster-grid" id="barracks-grid"></div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" data-nav="hub">&larr; Operations</button>
+        <div class="spacer"></div>
+        <button class="btn" id="btn-recruit">Recruit Replacements</button>
+      </div>
+    </section>
+
+    <!-- ============ RECRUIT ============ -->
+    <section id="screen-recruit" class="screen dark">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Personnel office</div>
+          <h2 class="screen-title">Recruitment</h2>
+          <div class="screen-sub">Three candidates are available. Hover a dossier for details. Roster cap: 10 living soldiers.</div>
+        </div>
+        <div class="resources" id="recruit-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="roster-grid" id="recruit-grid"></div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" id="btn-recruit-back">&larr; Barracks</button>
+        <div class="spacer"></div>
+        <button class="btn" id="btn-refresh-recruits">Request New Dossiers</button>
+      </div>
+    </section>
+
+    <!-- ============ PROFILE ============ -->
+    <section id="screen-profile" class="screen dark">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Service dossier</div>
+          <h2 class="screen-title" id="profile-heading">Soldier</h2>
+          <div class="screen-sub" id="profile-sub"></div>
+        </div>
+        <div class="resources" id="profile-resources"></div>
+      </div>
+      <div class="screen-body" id="profile-content"></div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" id="btn-profile-back">&larr; Barracks</button>
+        <div class="spacer"></div>
+        <span class="squad-count" id="profile-points"></span>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <!-- ============ ARSENAL ============ -->
+    <section id="screen-arsenal" class="screen">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Armoury</div>
+          <h2 class="screen-title">Arsenal</h2>
+          <div class="screen-sub">Weapons, optics and armour plating. Upgrades apply to every soldier carrying that weapon.</div>
+        </div>
+        <div class="resources" id="arsenal-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="hub-tabs">
+          <button class="hub-tab" data-nav="hub">Operations</button>
+          <button class="hub-tab" data-nav="barracks">Barracks</button>
+          <button class="hub-tab is-active" data-nav="arsenal">Arsenal</button>
+          <button class="hub-tab" data-nav="stats">Service Record</button>
+          <button class="hub-tab" data-nav="settings">Settings</button>
+        </div>
+        <div class="weapon-grid" id="arsenal-grid"></div>
+        <div class="panel" style="margin-top:12px">
+          <h4>Supply</h4>
+          <div class="btn-row">
+            <button class="btn btn--sm" data-supply="ammo">+120 Ammo &mdash; 180 cr</button>
+            <button class="btn btn--sm" data-supply="med">+2 Medical &mdash; 160 cr</button>
+            <button class="btn btn--sm" data-supply="intel">+1 Intel &mdash; 140 cr</button>
+          </div>
+        </div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" data-nav="hub">&larr; Operations</button>
+        <div class="spacer"></div>
+        <span class="squad-count">Only authorised weapon classes can be assigned to a role.</span>
+      </div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section id="screen-results" class="screen dark">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker" id="result-kicker">Mission debrief</div>
+          <h2 class="screen-title" id="result-heading">Debrief</h2>
+          <div class="screen-sub" id="result-sub"></div>
+        </div>
+        <div class="resources" id="result-resources"></div>
+      </div>
+      <div class="screen-body" id="result-content"></div>
+      <div class="screen-foot">
+        <div class="squad-count" id="result-footer"></div>
+        <div class="spacer"></div>
+        <button class="btn" id="btn-result-retry">Replay Operation</button>
+        <button class="btn btn--primary" id="btn-result-continue">Return to Base</button>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <!-- ============ STATS ============ -->
+    <section id="screen-stats" class="screen">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Task force nightjar</div>
+          <h2 class="screen-title">Service Record</h2>
+          <div class="screen-sub">Campaign progress, combat statistics, honours and the fallen.</div>
+        </div>
+        <div class="resources" id="stats-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="hub-tabs">
+          <button class="hub-tab" data-nav="hub">Operations</button>
+          <button class="hub-tab" data-nav="barracks">Barracks</button>
+          <button class="hub-tab" data-nav="arsenal">Arsenal</button>
+          <button class="hub-tab is-active" data-nav="stats">Service Record</button>
+          <button class="hub-tab" data-nav="settings">Settings</button>
+        </div>
+        <div id="stats-content"></div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" data-nav="hub">&larr; Operations</button>
+        <div class="spacer"></div>
+        <span class="squad-count" id="stats-footer"></span>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="screen-settings" class="screen dark">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">System</div>
+          <h2 class="screen-title">Settings</h2>
+          <div class="screen-sub">Audio, visual quality, interface scale and save management. Changes apply immediately.</div>
+        </div>
+        <div class="resources" id="settings-resources"></div>
+      </div>
+      <div class="screen-body">
+        <div class="settings-grid">
+          <div class="panel">
+            <h4>Audio</h4>
+            <div class="setting">
+              <div><div class="s-lab">Master volume</div><div class="s-desc">All game audio</div></div>
+              <div class="s-ctl"><input type="range" id="set-master" min="0" max="100" value="85"><span class="squad-count" id="val-master">85</span></div>
+            </div>
+            <div class="setting">
+              <div><div class="s-lab">Effects</div><div class="s-desc">Weapons, impacts, interface</div></div>
+              <div class="s-ctl"><input type="range" id="set-sfx" min="0" max="100" value="85"><span class="squad-count" id="val-sfx">85</span></div>
+            </div>
+            <div class="setting">
+              <div><div class="s-lab">Music</div><div class="s-desc">Generative tactical score</div></div>
+              <div class="s-ctl"><input type="range" id="set-music" min="0" max="100" value="50"><span class="squad-count" id="val-music">50</span></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h4>Presentation</h4>
+            <div class="setting">
+              <div><div class="s-lab">Visual quality</div><div class="s-desc">Particles, weather, grain</div></div>
+              <div class="s-ctl">
+                <select class="sel" id="set-quality">
+                  <option value="high">HIGH</option>
+                  <option value="medium">MEDIUM</option>
+                  <option value="low">LOW</option>
+                </select>
+              </div>
+            </div>
+            <div class="setting">
+              <div><div class="s-lab">HUD scale</div><div class="s-desc">Squad cards and command deck</div></div>
+              <div class="s-ctl"><input type="range" id="set-hud" min="75" max="125" value="100"><span class="squad-count" id="val-hud">100</span></div>
+            </div>
+            <div class="setting">
+              <div><div class="s-lab">Camera sensitivity</div><div class="s-desc">Pan and pinch response</div></div>
+              <div class="s-ctl"><input type="range" id="set-cam" min="50" max="150" value="100"><span class="squad-count" id="val-cam">100</span></div>
+            </div>
+            <div class="setting">
+              <div><div class="s-lab">Screen shake</div><div class="s-desc">Explosions and impacts</div></div>
+              <div class="s-ctl"><button class="toggle on" data-toggle="shake" aria-label="Screen shake"></button></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h4>Gameplay</h4>
+            <div class="setting">
+              <div><div class="s-lab">Aim assist</div><div class="s-desc">Slight accuracy bonus for player units</div></div>
+              <div class="s-ctl"><button class="toggle on" data-toggle="aimAssist" aria-label="Aim assist"></button></div>
+            </div>
+            <div class="setting">
+              <div><div class="s-lab">Damage numbers</div><div class="s-desc">Floating hit values</div></div>
+              <div class="s-ctl"><button class="toggle on" data-toggle="damageNumbers" aria-label="Damage numbers"></button></div>
+            </div>
+            <div class="setting">
+              <div><div class="s-lab">Tutorial hints</div><div class="s-desc">Contextual objective hints</div></div>
+              <div class="s-ctl"><button class="toggle on" data-toggle="hints" aria-label="Hints"></button></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h4>Save data</h4>
+            <div class="btn-row" style="margin-bottom:8px">
+              <button class="btn btn--sm" id="btn-save-export">Export</button>
+              <button class="btn btn--sm" id="btn-save-import">Import</button>
+              <button class="btn btn--sm" id="btn-save-copy">Copy</button>
+              <button class="btn btn--sm btn--danger" id="btn-save-reset">Erase Campaign</button>
+            </div>
+            <textarea class="save-area" id="save-export" spellcheck="false" placeholder="Save data appears here. Paste a save and press Import."></textarea>
+            <div class="result-note" style="margin-top:6px" id="save-status">Saves are stored locally in this browser. Export regularly.</div>
+          </div>
+        </div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" id="btn-settings-back">&larr; Back</button>
+        <div class="spacer"></div>
+        <span class="squad-count">SQUAD COMMANDER v1.0.0 &mdash; offline build</span>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <!-- ============ HELP ============ -->
+    <section id="screen-help" class="screen dark">
+      <div class="screen-head">
+        <div class="title-block">
+          <div class="kicker">Field manual</div>
+          <h2 class="screen-title">Controls &amp; Tactics</h2>
+          <div class="screen-sub">Read this once. It will keep your squad alive.</div>
+        </div>
+      </div>
+      <div class="screen-body">
+        <div class="settings-grid">
+          <div class="panel">
+            <h4>Touch controls</h4>
+            <ul class="obj-list">
+              <li><span class="box"></span><span><b>Tap a soldier card</b> to select. Long-press a card (or press ALL) to add to the selection.</span></li>
+              <li><span class="box"></span><span><b>Tap the battlefield</b> to issue the armed order at that point.</span></li>
+              <li><span class="box"></span><span><b>Drag</b> to pan the camera. <b>Two fingers</b> to pinch-zoom.</span></li>
+              <li><span class="box"></span><span><b>Order buttons</b> arm a mode; tap the world to execute. Tap MOVE to return to default.</span></li>
+              <li><span class="box"></span><span><b>QUEUE</b> lets you stack up to four orders per soldier.</span></li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Desktop controls</h4>
+            <ul class="obj-list">
+              <li><span class="box"></span><span><b>Space</b> tactical pause &mdash; orders still work while paused.</span></li>
+              <li><span class="box"></span><span><b>1&ndash;6</b> select soldier, <b>A</b> select all, <b>Shift+click</b> add to selection.</span></li>
+              <li><span class="box"></span><span><b>Q</b> queue, <b>R</b> reload, <b>C</b> cover, <b>O</b> overwatch, <b>F</b> focus, <b>X</b> suppress, <b>H</b> hold, <b>T</b> retreat, <b>G</b> regroup.</span></li>
+              <li><span class="box"></span><span><b>Wheel</b> zoom, <b>arrows</b> pan, <b>Esc</b> pause.</span></li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Tactical doctrine</h4>
+            <ul class="obj-list">
+              <li><span class="box"></span><span><b>Elevation is life.</b> High ground sees over low cover and shoots down into it.</span></li>
+              <li><span class="box"></span><span><b>Crouch behind cover.</b> The TAKE COVER order puts a soldier in the protected slot; standing behind sandbags is not cover.</span></li>
+              <li><span class="box"></span><span><b>Suppress, then flank.</b> Machine-gun fire pins enemies; use the pinned window to move assault troops.</span></li>
+              <li><span class="box"></span><span><b>Watch your lanes.</b> Soldiers will not fire through a friendly body. Spread the formation.</span></li>
+              <li><span class="box"></span><span><b>Medics win campaigns.</b> A downed soldier can be revived for 45 seconds. After that, they are gone for good.</span></li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Systems</h4>
+            <ul class="obj-list">
+              <li><span class="box"></span><span><b>Ammunition</b> is tracked per magazine and reserve. Empty weapons fall back to a sidearm.</span></li>
+              <li><span class="box"></span><span><b>Cover degrades.</b> Sustained fire destroys sandbags, crates, containers and fuel barrels. Barrels explode.</span></li>
+              <li><span class="box"></span><span><b>Wounds persist.</b> Injured soldiers sit out operations; deaths are permanent and recorded in the memorial.</span></li>
+              <li><span class="box"></span><span><b>Enemies are not omniscient.</b> They react to sight, gunfire and explosions, and share last-known positions.</span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="screen-foot">
+        <button class="btn btn--ghost" id="btn-help-back">&larr; Back</button>
+        <div class="spacer"></div>
+        <span class="squad-count">Difficulty is honest: smarter enemies, not bullet sponges.</span>
+      </div>
+      <div class="grain"></div>
+    </section>
+
+    <!-- ============ BATTLE HUD ============ -->
+    <div id="hud">
+      <div class="safe-top">
+        <div class="objectives-panel">
+          <div class="op-head">
+            <span class="op-name" id="hud-mission">OPERATION</span>
+            <span class="op-timer" id="hud-objtimer"></span>
+          </div>
+          <div id="hud-objectives"></div>
+        </div>
+        <div class="hud-meta">
+          <div class="mission-clock">
+            <div class="mc-label">MISSION TIME</div>
+            <div class="mc-time" id="hud-clock">00:00</div>
+          </div>
+          <div class="speed-group">
+            <button id="btn-pause" title="Pause">II</button>
+            <button data-speed="1" class="on" title="Normal speed">1&times;</button>
+            <button data-speed="2" title="Double speed">2&times;</button>
+          </div>
+          <button class="hud-icon-btn" id="btn-battle-settings" title="Settings"></button>
+        </div>
+      </div>
+      <div class="feed" id="hud-feed"></div>
+      <div class="hint" id="hud-hint"></div>
+      <div class="hud-bottom">
+        <div class="squad-block">
+          <div class="selected-strip" id="selected-strip"></div>
+          <div class="squad-strip" id="squad-strip"></div>
+        </div>
+        <div class="cmd-deck">
+          <div class="cmd-row" id="cmd-secondary"></div>
+          <div class="cmd-row" id="cmd-primary"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PAUSE ============ -->
+    <div id="pause" class="pause-wrap">
+      <div class="pause-panel">
+        <div class="kicker">Tactical pause</div>
+        <h2>Orders Hold</h2>
+        <div class="pause-stats" id="pause-stats"></div>
+        <div class="pause-actions">
+          <button class="btn btn--primary" data-pause-act="resume">Resume Operation</button>
+          <button class="btn" data-pause-act="settings">Settings</button>
+          <button class="btn" data-pause-act="help">Controls &amp; Field Manual</button>
+          <button class="btn" data-pause-act="restart">Restart Operation</button>
+          <button class="btn btn--danger" data-pause-act="abort">Abort to Base</button>
+        </div>
+        <div class="corner tl"></div><div class="corner br"></div>
+      </div>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+  </div>
+</div>
+<script>/*__JS__*/</script>
+</body>
+</html>
