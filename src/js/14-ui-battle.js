@@ -15,6 +15,7 @@ const CMD_DEFS = {
     { id: 'queue', label: 'QUEUE', ico: 'queue', hint: 'Queue orders' },
     { id: 'reload', label: 'RELOAD', ico: 'reload', hint: 'Reload weapons' },
     { id: 'heal', label: 'TREAT', ico: 'heal', hint: 'Treat a soldier' },
+    { id: 'carry', label: 'CARRY', ico: 'move', hint: 'Carry a downed soldier' },
     { id: 'retreat', label: 'FALL BK', ico: 'retreat', hint: 'Retreat to deployment' },
     { id: 'regroup', label: 'REGROUP', ico: 'regroup', hint: 'Regroup on commander' },
     { id: 'formation', label: 'LINE', ico: 'grid', hint: 'Cycle formation' },
@@ -71,6 +72,22 @@ Object.assign(UI, {
       if (e.target.closest('[data-all]')) { this.battle.selectAll(); return; }
       if (e.target.closest('[data-form]')) { this.battle.cycleFormation(); return; }
       if (e.target.closest('[data-queue]')) { this.battle.toggleQueue(); return; }
+      const cancelQ = e.target.closest('[data-cancel-q]');
+      if (cancelQ) {
+        const unit = this.battle.selectedUnits[0];
+        if (unit) this.battle.cancelOrder(unit, parseInt(cancelQ.dataset.cancelQ, 10));
+        return;
+      }
+      if (e.target.closest('[data-cancel-active]')) {
+        const unit = this.battle.selectedUnits[0];
+        if (unit) this.battle.cancelOrder(unit, null);
+        return;
+      }
+      if (e.target.closest('[data-drop]')) {
+        const unit = this.battle.selectedUnits[0];
+        if (unit && unit.carryId) { this.battle.dropCarried(unit); UI.refreshSelection(this.battle); }
+        return;
+      }
     });
     $('#pause').addEventListener('click', (e) => {
       if (e.target === $('#pause')) { if (this.battle) this.battle.setPaused(false); }
@@ -123,9 +140,11 @@ Object.assign(UI, {
       case 'focus':
       case 'suppress':
       case 'heal':
+      case 'carry':
         if (!b.selectedUnits.length) { this.toast('Select a soldier first', 'bad'); AudioSys.ui('deny'); return; }
         b.setOrderMode(cmd);
         if (cmd === 'heal') this.toast('Tap a soldier to treat');
+        else if (cmd === 'carry') this.toast('Tap a downed soldier to carry');
         else if (cmd === 'focus') this.toast('Tap a hostile to focus fire');
         else if (cmd === 'cover') this.toast('Tap a position to take cover');
         else if (cmd === 'overwatch') this.toast('Tap the direction to watch');
@@ -206,7 +225,7 @@ Object.assign(UI, {
         let t = '';
         if (a.dead) t = '';
         else if (a.downed) t = 'DOWN';
-        else if (a.order) t = a.order.type.toUpperCase();
+        else if (a.order) t = a.order.type.toUpperCase() + (a.order.state === 'waiting' ? '|PAUSE' : '');
         else if (a.overwatch) t = 'WATCH';
         else if (a.suppressAt) t = 'SUPPR';
         else if (a.reloadT > 0) t = 'RELOAD';
@@ -234,7 +253,7 @@ Object.assign(UI, {
       if (insp && insp.team === 'enemy' && !insp.dead) {
         el.innerHTML = `<div class="ss-name" style="color:var(--danger-2)">${esc(insp.enemyName || 'HOSTILE')}</div>
           <div class="ss-role">${(insp.type || '').toUpperCase()}</div>
-          <div class="ss-need">HP ${Math.round(insp.hp)} / ${insp.maxHp} · ${insp.aiState.toUpperCase()} · ${insp.weaponCfg ? insp.weaponCfg.name : ''}</div>
+          <div class="ss-need">HP ${Math.round(insp.hp)} / ${insp.maxHp} · ${insp.aiState.toUpperCase()} · ${insp.weaponCfg ? insp.weaponCfg.name : ''} · AWARE ${Math.round((insp.awareness || 0) * 100)}%${insp.suppression > 40 ? ' · PINNED' : ''}</div>
           <div class="ss-bars"><button class="btn btn--sm" data-all="1">SELECT SQUAD</button></div>`;
         return;
       }
@@ -251,7 +270,8 @@ Object.assign(UI, {
           <button class="btn btn--sm" data-all="1">ALL</button>
           <button class="btn btn--sm" data-form="1">${battle.formation.toUpperCase()}</button>
           <button class="btn btn--sm ${battle.queueMode ? 'btn--primary' : ''}" data-queue="1">QUEUE ${battle.queueMode ? 'ON' : 'OFF'}</button>
-        </div>`;
+        </div>
+        ${units.some((x) => x.order || x.queue.length) ? `<div class="cmdq">${units.filter((x) => x.order).map((x) => `<span class="cmdq-chip is-active">${esc((x.callsign || '?').slice(0, 5))}:${x.order.type.toUpperCase()}${x.queue.length ? ' +' + x.queue.length : ''}</span>`).join('')}</div>` : ''}`;
       return;
     }
     const u = units[0];
@@ -265,14 +285,23 @@ Object.assign(UI, {
     else if (u.suppressAt) need = 'SUPPRESSING';
     else if (u.suppression > 45) need = 'SUPPRESSED — seek cover';
     else need = `${u.holding ? 'HOLDING' : u.moving ? 'MOVING' : 'READY'} · ${u.medkits} MEDKIT${u.medkits === 1 ? '' : 'S'} · ${u.weaponCfg ? u.weaponCfg.name : ''}`;
+    const chips = [];
+    if (u.order) {
+      chips.push(`<span class="cmdq-chip is-active" title="${esc(u.order.reason || '')}">${u.order.type.toUpperCase()}${u.order.state === 'waiting' ? ' · PAUSED' : ''}<button data-cancel-active="1" aria-label="Cancel order">×</button></span>`);
+    }
+    u.queue.forEach((q, qi) => {
+      chips.push(`<span class="cmdq-chip"><b>${qi + 1}</b>${q.type.toUpperCase()}<button data-cancel-q="${qi}" aria-label="Cancel queued order">×</button></span>`);
+    });
     el.innerHTML = `<div class="ss-name">${esc(u.callsign || u.name)}</div>
       <div class="ss-role">${ROLES[u.role].label}${u.isCommander ? ' · CMD' : ''}</div>
       <div class="ss-need">${esc(need)}</div>
+      ${chips.length ? `<div class="cmdq">${chips.join('')}</div>` : ''}
       <div class="ss-bars">
         <div class="ssbar hp ${hpPct < 30 ? 'low' : ''}"><div class="lab"><span>HP</span><span>${Math.round(Math.max(0, u.hp))}/${u.maxHp}</span></div><div class="tr"><i style="width:${hpPct}%"></i></div></div>
         <div class="ssbar am"><div class="lab"><span>AMMO</span><span>${u.mag}/${u.reserve}</span></div><div class="tr"><i style="width:${amPct}%"></i></div></div>
         <button class="btn btn--sm" data-all="1">ALL</button>
         <button class="btn btn--sm" data-form="1">${battle.formation.toUpperCase()}</button>
+        ${u.carryId ? '<button class="btn btn--sm" data-drop="1">DROP CASUALTY</button>' : ''}
       </div>`;
   },
 
@@ -299,9 +328,15 @@ Object.assign(UI, {
         let pct = null;
         if (['hold', 'interact', 'rescue', 'rescueUnits', 'survive'].includes(o.type) && o.max) pct = clamp(o.progress / o.max, 0, 1);
         const cls = o.complete ? 'done' : o.failed ? 'failed' : o.optional ? 'opt' : '';
+        let detail = '';
+        if (o.type === 'extract' && !o.complete) {
+          const req = battle.extractRequirement();
+          detail = `<span class="obj-detail">${esc(req.detail)}</span>`;
+        }
         return `<div class="obj ${cls}">
           <span class="b"></span>
           <span>${esc(o.label)}</span>
+          ${detail}
           ${pct != null && !o.complete && !o.failed ? `<span class="pbar"><i style="width:${Math.round(pct * 100)}%"></i></span>` : ''}
         </div>`;
       }).join('');

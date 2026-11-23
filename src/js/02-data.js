@@ -2,10 +2,11 @@
 /* ============================================================
    02 — DATA DEFINITIONS
    ============================================================ */
-const GAME_VERSION = '1.0.0';
-const SAVE_KEY = 'squadcommander.save.v2';
-const SAVE_BACKUP = 'squadcommander.save.v2.bak';
-const SAVE_VERSION = 2;
+const GAME_VERSION = '2.0.0';
+const SAVE_KEY = 'squadcommander.save.v3';
+const SAVE_BACKUP = 'squadcommander.save.v3.bak';
+const SAVE_PENDING = 'squadcommander.save.v3.pending';
+const SAVE_VERSION = 3;
 
 const SETTINGS_DEFAULT = {
   master: 0.85, sfx: 0.85, music: 0.5,
@@ -223,7 +224,7 @@ const MISSIONS = [
     id: 'm02', region: 0, name: 'NO MAN LEFT BEHIND', type: 'SEARCH & RESCUE', theme: 'urban', tod: 'dusk',
     seed: 1102, width: 3600, heights: [620, 572, 500, 572, 620], coverDensity: 1.1,
     timeLimit: 480, par: 150, threat: 2,
-    deploy: { x: 0.05, spread: 110, width: 170 }, evac: { x: 0.94 },
+    deploy: { x: 0.05, spread: 110, width: 170 }, evac: { x: 0.94 }, extractPolicy: 'vip',
     objectives: [
       { type: 'rescue', x: 0.72, label: 'Locate and treat the downed pilot', seconds: 3.5, tag: 'pilot' },
       { type: 'extract', label: 'Extract the pilot' }
@@ -268,7 +269,7 @@ const MISSIONS = [
       { type: 'interact', x: 0.36, label: 'Plant charge — antenna A', seconds: 5 },
       { type: 'interact', x: 0.64, label: 'Plant charge — antenna B', seconds: 5 },
       { type: 'extract', label: 'Fall back to extraction' }
-    ],
+    ], extractPolicy: 'all',
     optional: [{ type: 'noKia', label: 'No soldiers killed' }],
     enemies: [
       { type: 'rifleman', x: 0.28 }, { type: 'sniper', x: 0.48 },
@@ -327,7 +328,7 @@ const MISSIONS = [
     objectives: [
       { type: 'rescueUnits', tags: ['hostage1', 'hostage2'], seconds: 2.6, label: 'Free the hostages' },
       { type: 'extract', label: 'Extract hostages and squad' }
-    ],
+    ], extractPolicy: 'all',
     optional: [{ type: 'noKia', label: 'No soldiers killed' }],
     enemies: [
       { type: 'rifleman', x: 0.3 }, { type: 'rifleman', x: 0.42 },
@@ -435,7 +436,7 @@ const MISSIONS = [
     objectives: [
       { type: 'killTarget', tag: 'warlord', label: 'Eliminate the warlord' },
       { type: 'extract', label: 'Extract the squad' }
-    ],
+    ], extractPolicy: 'commander',
     optional: [{ type: 'noKia', label: 'No soldiers killed' }],
     enemies: [
       { type: 'rifleman', x: 0.3 }, { type: 'flanker', x: 0.42 },

@@ -37,6 +37,7 @@ function drawMenuBackdrop(ctx, level, cam, t, opts = {}) {
   const view = Stage.viewFor(cam);
   Art.drawTerrain(ctx, level, view);
   Art.drawPlatformFaces(ctx, level, view);
+  Art.drawPlatforms(ctx, level, view);
   // props
   for (const p of level.props) drawWorldProp(ctx, p);
   for (const c of level.covers) Art.drawCover(ctx, c, level);
@@ -238,6 +239,7 @@ Battle.prototype.render = function () {
   const view = Stage.viewFor(cam);
   Art.drawTerrain(ctx, level, view);
   Art.drawPlatformFaces(ctx, level, view);
+  Art.drawPlatforms(ctx, level, view);
   // decals under units
   this.drawDecals(ctx, view);
   // props behind
@@ -276,6 +278,33 @@ Battle.prototype.render = function () {
     if (u.dead) continue;
     if (u.x < view.left - 70 || u.x > view.right + 70) continue;
     drawUnitTag(ctx, u, this.selected.has(u.id));
+  }
+  // formation preview
+  if (this.formationPreview && this.formationPreview.t > 0) {
+    const fp = this.formationPreview;
+    const a = clamp(fp.t / 2.2, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = 'rgba(227,166,63,.35)';
+    ctx.setLineDash([3, 5]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < fp.slots.length; i++) {
+      const sl = fp.slots[i];
+      if (i === 0) ctx.moveTo(sl.x, sl.y - 2); else ctx.lineTo(sl.x, sl.y - 2);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const sl of fp.slots) {
+      ctx.fillStyle = 'rgba(227,166,63,.10)';
+      ctx.strokeStyle = 'rgba(227,166,63,.75)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(sl.x, sl.y, 9, 3.4, 0, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(sl.x - 3, sl.y - 7); ctx.lineTo(sl.x + 3, sl.y - 7); ctx.lineTo(sl.x, sl.y - 3); ctx.closePath();
+      ctx.fillStyle = 'rgba(227,166,63,.8)'; ctx.fill();
+    }
+    ctx.restore();
   }
   // selected unit order path
   for (const u of this.selectedUnits) this.drawUnitPath(ctx, u);

@@ -1,25 +1,27 @@
-const { chromium } = require('/home/ubuntu/opencode project/LIMINAL/node_modules/playwright');
+'use strict';
+/* Boot smoke: the single file loads offline with zero external requests. */
+const h = require('./lib/harness');
 
 (async () => {
-  const browser = await chromium.launch({
-    args: ['--no-sandbox', '--allow-file-access-from-files', '--autoplay-policy=no-user-gesture-required']
-  });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
-  const errors = [];
-  page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE ERROR:', m.text()); });
-  page.on('pageerror', (e) => { errors.push(e.message); console.log('PAGE ERROR:', e.message); });
-  page.on('requestfailed', (r) => console.log('REQ FAILED:', r.url()));
-  await page.goto('file:///home/ubuntu/opencode project/squad commander/SQUAD_COMMANDER.html');
-  await page.waitForTimeout(1600);
+  const ctx = await h.launch();
+  const page = ctx.page;
+
   const info = await page.evaluate(() => ({
     hasSC: !!window.__SC,
     title: document.title,
     menuActive: document.querySelector('#screen-menu').classList.contains('is-active'),
     canvas: [document.querySelector('#stage').width, document.querySelector('#stage').height],
-    state: window.__SC ? window.__SC.state() : null
+    version: typeof GAME_VERSION !== 'undefined' ? GAME_VERSION : null
   }));
-  console.log(JSON.stringify(info, null, 1));
-  await page.screenshot({ path: '/tmp/opencode/menu.png' });
-  console.log('errors:', errors.length);
-  await browser.close();
-})();
+
+  h.assert(info.hasSC, 'debug/testing API is present');
+  h.assert(info.menuActive, 'main menu is the active screen on boot');
+  h.assert(info.canvas[0] > 0 && info.canvas[1] > 0, 'render canvas is sized');
+  h.assert(info.version != null, 'game version constant is defined');
+  h.assertClean(ctx);
+
+  h.assert(ctx.requests.length === 0, 'zero non-file requests on boot (offline)');
+  await h.shot(page, 'boot-menu');
+  h.summary('smoke');
+  await ctx.close();
+})().catch((e) => { console.error(e); process.exit(1); });

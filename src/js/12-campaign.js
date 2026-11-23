@@ -5,7 +5,79 @@
 const Campaign = {
   data: null,
   settings: { ...SETTINGS_DEFAULT },
+  recoveredFromBackup: false,
+  lastSaveError: null,
   _namesUsed: new Set(),
+
+  checksum(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; }
+    return h.toString(36);
+  },
+
+  validateCampaign(c) {
+    if (!c || typeof c !== 'object') return 'campaign missing';
+    if (!Array.isArray(c.roster) || !c.roster.length || c.roster.length > 40) return 'roster invalid';
+    if (typeof c.difficulty !== 'string' || !DIFFICULTIES[c.difficulty]) return 'difficulty invalid';
+    for (const k of ['credits', 'ammo', 'med', 'intel']) {
+      if (typeof c[k] !== 'number' || !isFinite(c[k])) return k + ' invalid';
+    }
+    if (!c.progress || typeof c.progress !== 'object') return 'progress invalid';
+    for (const s of c.roster) {
+      if (!s || typeof s.id !== 'string' || typeof s.role !== 'string' || !ROLES[s.role]) return 'soldier invalid';
+      if (typeof s.name !== 'string') return 'soldier name invalid';
+      if (typeof s.xp !== 'number' || !isFinite(s.xp) || s.xp < 0) return 'xp invalid';
+      if (!s.skills || typeof s.skills !== 'object') return 'skills invalid';
+      if (!['ready', 'injured', 'dead'].includes(s.status)) return 'status invalid';
+      if (typeof s.hp !== 'number' || !isFinite(s.hp)) return 'hp invalid';
+      if (typeof s.weapon !== 'string' || !WEAPONS[s.weapon]) return 'weapon invalid';
+    }
+    return null;
+  },
+
+  clampCampaign(c) {
+    c.credits = Math.max(0, Math.round(c.credits || 0));
+    c.ammo = Math.max(0, Math.round(c.ammo || 0));
+    c.med = Math.max(0, Math.round(c.med || 0));
+    c.intel = Math.max(0, Math.round(c.intel || 0));
+    if (!Array.isArray(c.recruits)) c.recruits = [];
+    for (const s of c.roster) {
+      s.xp = Math.max(0, Math.round(s.xp || 0));
+      s.hp = Math.max(0, Math.min(999, Math.round(s.hp || 0)));
+      if (!Array.isArray(s.history)) s.history = [];
+      s.armor = clamp(Math.round(s.armor || 1), 1, 3);
+    }
+    for (const id in c.progress) {
+      const p = c.progress[id];
+      p.stars = clamp(Math.round(p.stars || 0), 0, 3);
+      p.attempts = Math.max(0, Math.round(p.attempts || 0));
+      p.status = ['locked', 'available', 'complete'].includes(p.status) ? p.status : 'locked';
+      p.completed = !!p.completed;
+    }
+    return c;
+  },
+
+  wrapPayload(campaign, settings) {
+    const body = JSON.stringify({ campaign, settings });
+    return { version: SAVE_VERSION, savedAt: Date.now(), checksum: this.checksum(body), body: JSON.parse(body) };
+  },
+
+  unwrapPayload(raw) {
+    if (!raw || typeof raw !== 'object') return 'payload missing';
+    if (raw.version !== SAVE_VERSION) return 'version mismatch';
+    if (typeof raw.checksum !== 'string' || !raw.body || typeof raw.body !== 'object') return 'corrupt payload';
+    const body = JSON.stringify({ campaign: raw.body.campaign, settings: raw.body.settings });
+    if (this.checksum(body) !== raw.checksum) return 'checksum mismatch';
+    const err = this.validateCampaign(raw.body.campaign);
+    if (err) return err;
+    return null;
+  },
+
+  normalizePayload(raw) {
+    const c = this.clampCampaign(deepClone(raw.body.campaign));
+    const s = Object.assign({ ...SETTINGS_DEFAULT }, raw.body.settings || {});
+    return { campaign: c, settings: s };
+  },
 
   blankSoldier(role, name, callsign, opts = {}) {
     const base = ROLES[role];
@@ -85,42 +157,78 @@ const Campaign = {
   },
 
   load() {
-    try {
-      const raw = storeGet(SAVE_KEY);
-      if (!raw) return false;
-      if (raw.version !== SAVE_VERSION) {
-        // attempt soft migration
-        if (!raw.campaign) { console.warn('save version mismatch'); return false; }
+    // 1) primary → 2) backup → 3) legacy v2 → 4) fail
+    const attempt = (key, migrator) => {
+      const raw = storeGet(key);
+      if (!raw) return null;
+      if (raw.version === SAVE_VERSION) {
+        const err = this.unwrapPayload(raw);
+        if (err) { console.warn('save rejected (' + key + '):', err); return null; }
+        return this.normalizePayload(raw);
       }
-      if (!raw.campaign || !Array.isArray(raw.campaign.roster) || !raw.campaign.roster.length) return false;
-      this.data = raw.campaign;
-      this.settings = Object.assign({ ...SETTINGS_DEFAULT }, raw.settings || {});
+      if (migrator) return migrator(raw);
+      return null;
+    };
+    const migrateV2 = (raw) => {
+      if (!raw || raw.version !== 2 || !raw.campaign) return null;
+      if (this.validateCampaign(raw.campaign)) return null;
+      const payload = this.wrapPayload(raw.campaign, raw.settings || {});
+      return this.normalizePayload(payload);
+    };
+    let result = attempt(SAVE_KEY) || attempt(SAVE_KEY, migrateV2) ||
+                 attempt(SAVE_BACKUP) || attempt(SAVE_BACKUP, migrateV2);
+    if (result) {
+      // Detect which key actually served the data
+      const primaryOk = (() => {
+        const raw = storeGet(SAVE_KEY);
+        if (!raw) return false;
+        if (raw.version === SAVE_VERSION) return !this.unwrapPayload(raw);
+        return !!migrateV2(raw);
+      })();
+      this.recoveredFromBackup = !primaryOk;
+      this.data = result.campaign;
+      this.settings = Object.assign({ ...SETTINGS_DEFAULT }, result.settings || {});
       this.ensureDefaults();
+      if (this.recoveredFromBackup) {
+        this.save(); // re-commit the recovered state to primary
+      }
       return true;
-    } catch (e) {
-      console.warn('save load failed', e);
-      return false;
     }
+    console.warn('no valid save found (primary or backup)');
+    return false;
   },
 
   save() {
     if (!this.data) return false;
     this.data.updatedAt = Date.now();
-    const payload = { version: SAVE_VERSION, campaign: this.data, settings: this.settings };
-    const ok = storeSet(SAVE_KEY, payload);
-    if (ok) {
-      // keep a backup snapshot at most every few saves
-      if (!this._lastBackup || Date.now() - this._lastBackup > 60000) {
-        this._lastBackup = Date.now();
-        storeSet(SAVE_BACKUP, payload);
+    const payload = this.wrapPayload(this.data, this.settings);
+    try {
+      // atomic-ish: pending → verify → rotate → commit
+      storeSet(SAVE_PENDING, payload);
+      const check = storeGet(SAVE_PENDING);
+      if (!check || this.unwrapPayload(check)) {
+        this.lastSaveError = 'pending validation failed';
+        return false;
       }
+      const current = storeGet(SAVE_KEY);
+      if (current && !this.unwrapPayload(current)) {
+        storeSet(SAVE_BACKUP, current); // keep last good as backup
+      }
+      storeSet(SAVE_KEY, payload);
+      storeRemove(SAVE_PENDING);
+      this.lastSaveError = null;
+      return true;
+    } catch (e) {
+      this.lastSaveError = e && e.message || 'write failed';
+      console.warn('save failed', e);
+      return false;
     }
-    return ok;
   },
 
   reset() {
-    storeRemove(SAVE_KEY); storeRemove(SAVE_BACKUP);
+    storeRemove(SAVE_KEY); storeRemove(SAVE_BACKUP); storeRemove(SAVE_PENDING);
     this.data = null;
+    this.recoveredFromBackup = false;
   },
 
   /* ---- queries ---- */
@@ -393,20 +501,41 @@ const Campaign = {
   },
 
   exportSave() {
-    return JSON.stringify({ version: SAVE_VERSION, campaign: this.data, settings: this.settings }, null, 1);
+    return JSON.stringify(this.wrapPayload(this.data, this.settings), null, 1);
   },
 
   importSave(text) {
     try {
       const raw = JSON.parse(text);
-      if (!raw || !raw.campaign || !Array.isArray(raw.campaign.roster)) return { ok: false, msg: 'Invalid save data' };
-      this.data = raw.campaign;
-      this.settings = Object.assign({ ...SETTINGS_DEFAULT }, raw.settings || {});
+      if (raw && raw.version === 2 && raw.campaign) {
+        if (this.validateCampaign(raw.campaign)) return { ok: false, msg: 'Invalid campaign structure' };
+        this.data = this.clampCampaign(deepClone(raw.campaign));
+        this.settings = Object.assign({ ...SETTINGS_DEFAULT }, raw.settings || {});
+        this.ensureDefaults();
+        this.save();
+        return { ok: true };
+      }
+      const err = this.unwrapPayload(raw);
+      if (err) return { ok: false, msg: 'Save rejected: ' + err };
+      const norm = this.normalizePayload(raw);
+      this.data = norm.campaign;
+      this.settings = norm.settings;
       this.ensureDefaults();
       this.save();
       return { ok: true };
     } catch (e) {
       return { ok: false, msg: 'Could not parse save data' };
     }
+  },
+
+  diagnoseSave() {
+    const out = {};
+    for (const [name, key] of [['primary', SAVE_KEY], ['backup', SAVE_BACKUP], ['pending', SAVE_PENDING]]) {
+      const raw = storeGet(key);
+      if (!raw) { out[name] = 'missing'; continue; }
+      const err = raw.version === SAVE_VERSION ? this.unwrapPayload(raw) : 'legacy/unknown version';
+      out[name] = err ? 'invalid: ' + err : 'valid';
+    }
+    return out;
   }
 };

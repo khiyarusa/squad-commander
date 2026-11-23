@@ -400,10 +400,19 @@ input[type=range]::-moz-range-thumb{width:12px;height:16px;background:var(--acce
   border:1px solid var(--line);border-left:2px solid var(--accent);min-height:34px;
   backdrop-filter:blur(4px);
 }
+.obj .obj-detail{margin-left:auto;font-size:9px;letter-spacing:.1em;color:var(--accent);white-space:nowrap}
 .selected-strip .ss-name{font-size:14px;font-weight:700;letter-spacing:.05em;white-space:nowrap}
 .selected-strip .ss-role{font-size:9px;letter-spacing:.2em;color:var(--olive);text-transform:uppercase;white-space:nowrap}
 .selected-strip .ss-need{font-size:11px;color:var(--muted);font-family:var(--font-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selected-strip .ss-bars{display:flex;gap:10px;margin-left:auto;align-items:center}
+.cmdq{display:flex;gap:4px;align-items:center;max-width:44vw;overflow-x:auto;scrollbar-width:none}
+.cmdq::-webkit-scrollbar{display:none}
+.cmdq-chip{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 2px 0 5px;font-size:8.5px;letter-spacing:.1em;
+  color:#d9d3c2;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);white-space:nowrap}
+.cmdq-chip b{color:var(--accent);font-weight:700}
+.cmdq-chip.is-active{border-color:rgba(227,166,63,.62);color:var(--accent)}
+.cmdq-chip button{width:14px;height:14px;line-height:12px;padding:0;border:0;background:rgba(255,255,255,.07);color:#cfc7b2;font-size:11px;cursor:pointer}
+.cmdq-chip button:hover{background:var(--danger);color:#fff}
 .ssbar{width:74px}
 .ssbar .lab{font-size:8px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between}
 .ssbar .tr{height:4px;background:rgba(255,255,255,.12);margin-top:2px;overflow:hidden}

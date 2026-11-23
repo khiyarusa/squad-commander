@@ -6,6 +6,9 @@ const App = { scene: 'menu', last: 0, acc: 0, started: false };
 
 function boot() {
   const loaded = Campaign.load();
+  if (loaded && Campaign.recoveredFromBackup) {
+    setTimeout(() => UI.toast('Save recovered from backup', 'bad'), 800);
+  }
   if (!loaded) {
     const ls = storeGet('squadcommander.settings');
     if (ls) Campaign.settings = Object.assign({ ...SETTINGS_DEFAULT }, ls);
@@ -14,11 +17,11 @@ function boot() {
   Stage.init($('#stage'));
   UI.init();
   try { MenuScene.init(); } catch (e) { console.warn('menu scene failed', e); }
-  window.addEventListener('beforeunload', () => { try { Campaign.save(); } catch (e) { } });
+  window.addEventListener('beforeunload', () => { if (!window.__SC_NO_AUTOSAVE) { try { Campaign.save(); } catch (e) { } } });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       if (UI.battle && !UI.battle.result && !UI.battle.paused) UI.battle.setPaused(true);
-      Campaign.save();
+      if (!window.__SC_NO_AUTOSAVE) Campaign.save();
     }
   });
   window.addEventListener('keydown', onKeyDown);

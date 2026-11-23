@@ -36,7 +36,7 @@ Battle.prototype.allyAcquireTarget = function (u) {
 
 Battle.prototype.autoCoverFor = function (u, threatX) {
   if (!u.prefersCover) return false;
-  const found = findNearbyCover(this.level, u.x + (u.formationIndex % 3 - 1) * 40, threatX, 230);
+  const found = findNearbyCover(this.level, u.x + (u.formationIndex % 3 - 1) * 40, threatX, 230, null, u.y);
   if (!found) return false;
   claimCover(found.cover, u.id);
   if (Math.abs(found.x - u.x) < 6) {
@@ -55,9 +55,61 @@ Battle.prototype.autoCoverFor = function (u, threatX) {
   return false;
 };
 
+Battle.prototype.allyTryFire = function (u, dt, target) {
+  if (!u || u.dead || u.downed || !u.weaponCfg) return false;
+  if (u.reloadT > 0 || u.carryId) return false;
+  if (u.mag <= 0) { if (u.reserve > 0) this.startReload(u); return false; }
+  const tgt = target || u.target || this.allyAcquireTarget(u);
+  if (!tgt || tgt.dead) return false;
+  if (Math.abs(tgt.x - u.x) > u.weaponCfg.range * 1.04) return false;
+  const eye = unitEye(u), c = unitCenter(tgt);
+  if (!lineOfSight(this.level, eye.x, eye.y, c.x, c.y)) return false;
+  const m = muzzlePoint(u);
+  const desired = Math.atan2(c.y - m.y, c.x - m.x);
+  u.desiredAim = desired;
+  u.dir = Math.cos(desired) >= 0 ? 1 : -1;
+  u.anim = 'aim';
+  u.state = 'aim';
+  u.aimT = (u.aimT || 0) + dt * (u.react || 1) * (1 - (u.suppression || 0) * 0.0035);
+  if (u.aimT < u.weaponCfg.aim) return false;
+  if (u.burstPause > 0) { u.burstPause -= dt; return false; }
+  if (u.burstLeft == null || u.burstLeft <= 0) {
+    u.burstLeft = u.weaponCfg.burst ? u.weaponCfg.burst[0] : 2;
+    u.burstPause = 0.15 + Math.random() * 0.3;
+    return false;
+  }
+  const fired = this.fireWeapon(u, c.x, c.y, { spreadMul: 1.25 });
+  if (fired) { u.burstLeft--; u.aimT = 0; }
+  return fired;
+};
+
 Battle.prototype.updateAllyUnit = function (u, dt) {
   if (u.dead || u.downed) return;
   if (u.healAudioT > 0) u.healAudioT -= dt;
+
+  /* ---- interruption: emergency cover, then resume the paused command ---- */
+  if (u.interrupt) {
+    u.interrupt.t -= dt;
+    u.moving = false;
+    const threat = this.enemies.find((e) => !e.dead);
+    if (!u.interrupt.target && threat) {
+      const found = findNearbyCover(this.level, u.x, threat.x, 280, threat.y, u.y);
+      u.interrupt.target = found;
+      if (found) { claimCover(found.cover, u.id); const p = findPath(this.level, u.x, u.y, found.x, found.y); if (p) { u.path = p; u.pathI = 0; } }
+    }
+    if (u.path) this.moveAlongPath(u, dt, 1.35);
+    if (u.interrupt.target && Math.abs(u.x - u.interrupt.target.x) < 14) this.attachCover(u, u.interrupt.target.cover.id);
+    if (u.interrupt.t <= 0) {
+      const cmd = u.order;
+      u.interrupt = null;
+      u.path = null;
+      if (cmd && cmd.state === 'waiting') this.resumeCommand(u);
+    }
+    const tgtI = this.allyAcquireTarget(u);
+    u.target = tgtI;
+    if (tgtI) this.allyTryFire(u, dt);
+    return;
+  }
 
   /* ---- movement execution ---- */
   const beforeX = u.x;
@@ -123,6 +175,39 @@ Battle.prototype.updateAllyUnit = function (u, dt) {
     if (Math.abs(u.healTarget.x - u.x) < 36) return; // stay on task
   }
 
+  /* ---- persistent command termination + follow behaviour ---- */
+  if (u.order) {
+    const o = u.order;
+    if (o.type === 'focus') {
+      const alive = this.enemies.some((e) => e.id === o.targetId && !e.dead);
+      if (!alive) { this.completeOrder(u, 'target eliminated'); return; }
+    }
+    if (o.type === 'suppress' && u.mag <= 0 && u.reserve <= 0) { this.failOrder(u, o, 'ammunition exhausted'); return; }
+    if (o.type === 'overwatch' && u.mag <= 0 && u.reserve <= 0) { this.failOrder(u, o, 'ammunition exhausted'); return; }
+    if ((o.type === 'hold' || o.type === 'overwatch') && u.breakT == null) u.breakT = 0;
+    if (o.type === 'follow') {
+      const leader = this.aliveAllies.find((a) => a.role === 'commander') || this.aliveAllies[0];
+      if (!leader || leader === u) { this.completeOrder(u, 'leader lost'); return; }
+      const want = leader.x - Math.sign(leader.dir || 1) * 46;
+      if (Math.abs(want - u.x) > 54 || Math.abs(leader.y - u.y) > 24) {
+        if (!u.path || this.time - (u.lastPathT || 0) > 0.9) {
+          const p = findPath(this.level, u.x, u.y, want, leader.y);
+          if (p) { u.path = p; u.pathI = 0; u.lastPathT = this.time; }
+        }
+        this.moveAlongPath(u, dt, 1.15);
+      } else {
+        u.moving = false;
+      }
+    }
+  }
+  if (u.carryId) {
+    const ev = this.level.evac;
+    if (ev && Math.abs(u.x - ev.x) < 92 && Math.abs(u.y - ev.y) < 30) {
+      this.addFeed(`${u.callsign || u.name}: casualty at extraction — dropping`, 'good');
+      this.dropCarried(u);
+    }
+  }
+
   /* ---- reload logic ---- */
   if (u.reloadT <= 0 && u.weaponCfg) {
     if (u.mag <= 0 && u.reserve > 0) this.startReload(u);
@@ -143,6 +228,35 @@ Battle.prototype.updateAllyUnit = function (u, dt) {
     }
   }
   if (u.healingAuto && !u.order) u.healingAuto = false;
+
+  /* ---- casualty recovery: nearby idle soldiers pick up the wounded ---- */
+  if (!u.order && !u.moving && !u.carryId && u.hp > u.maxHp * 0.45 && this.time > 4 && !u.recoveringAuto) {
+    const enemiesNear = this.enemies.some((e) => !e.dead && Math.abs(e.x - u.x) < 260);
+    if (!enemiesNear) {
+      const casualty = this.allies.find((a) => a !== u && !a.dead && a.downed && !a.carriedBy &&
+        Math.abs(a.x - u.x) < 360 && !this.allies.some((o) => o !== u && o.carryTargetId === a.id));
+      if (casualty) {
+        u.recoveringAuto = true;
+        this.startOrder(u, { type: 'carry', targetId: casualty.id, auto: true });
+        this.addFeed(`${u.callsign || u.name}: moving to recover ${casualty.callsign || casualty.name}`);
+      }
+    }
+  }
+  if (u.recoveringAuto && !u.order && !u.carryId) u.recoveringAuto = false;
+
+  /* ---- a carrier automatically brings the casualty to extraction ---- */
+  if (u.carryId && !u.order) {
+    const ev = this.level.evac;
+    if (ev && Math.abs(u.x - ev.x) > 60) {
+      if (!u.path) {
+        const p = findPath(this.level, u.x, u.y, ev.x + (u.x < ev.x ? -34 : 34), ev.y);
+        if (p) { u.path = p; u.pathI = 0; u.lastPathT = this.time; }
+      }
+      this.moveAlongPath(u, dt, 0.85);
+    } else {
+      u.moving = false;
+    }
+  }
 
   /* ---- firing ---- */
   if (u.reloadT > 0 || u.healTarget) {
@@ -240,7 +354,8 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
   /* state selection */
   const hpRatio = u.hp / u.maxHp;
   if (!u.dead) {
-    if (hpRatio < 0.24 && u.aiState !== 'retreat' && u.aiState !== 'engage') {
+    if ((u.confidence == null) || this.time % 0.5 < 0.05) u.confidence = this.enemyConfidence(u);
+    if ((hpRatio < 0.28 || (u.confidence != null && u.confidence < 0.22)) && u.aiState !== 'retreat' && u.aiState !== 'engage' && u.stateT > 0.6) {
       u.aiState = 'retreat';
       u.stateT = 0;
     }
@@ -287,6 +402,7 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
     }
     if (u.aiState === 'alert' && u.stateT > 9 && !u.target) { u.aiState = 'investigate'; u.stateT = 0; }
     if (u.aiState === 'investigate' && u.stateT > 11) { u.aiState = 'patrol'; u.stateT = 0; u.alertPos = null; }
+    if (u.aiState === 'search' && u.stateT > 14) { u.aiState = 'patrol'; u.stateT = 0; u.alertPos = null; u.searchPts = null; }
   }
 
   /* movement + combat */
@@ -303,6 +419,33 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
       } else {
         if (this.moveAlongPath(u, dt, 0.62)) { u.path = null; u.patrolWait = 2 + Math.random() * 3; }
       }
+      break;
+    }
+    case 'search': {
+      u.stance = 'stand';
+      if (!u.searchPts || !u.searchPts.length) {
+        const c = u.lastSeen || { x: u.x, y: u.y };
+        u.searchPts = [
+          { x: clamp(c.x + (Math.random() - 0.5) * 150, 30, this.level.width - 30) },
+          { x: clamp(c.x + (Math.random() - 0.5) * 280, 30, this.level.width - 30) },
+          { x: clamp(c.x + (Math.random() - 0.5) * 120, 30, this.level.width - 30) }
+        ];
+        u.searchI = 0;
+        u.path = null;
+      }
+      const pt = u.searchPts[u.searchI % u.searchPts.length];
+      if (!u.path) {
+        const p = findPath(this.level, u.x, u.y, pt.x, this.level.floorAt(pt.x).y);
+        if (p) { u.path = p; u.pathI = 0; }
+        else u.searchI++;
+      } else if (this.moveAlongPath(u, dt, 0.78)) {
+        u.path = null;
+        u.searchI++;
+        u.patrolWait = 1.2 + Math.random() * 1.6;
+      }
+      if (u.patrolWait > 0) { u.patrolWait -= dt; u.moving = false; }
+      u.desiredAim = Math.sin(this.time * 1.7) * 0.7 + (u.dir > 0 ? 0 : Math.PI);
+      if (u.stateT > 10) { u.aiState = 'patrol'; u.stateT = 0; u.searchPts = null; }
       break;
     }
     case 'alert':
@@ -357,6 +500,19 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
         break;
       }
       const d = Math.abs(tgt.x - u.x);
+      if (u.tactic === 'flank' && u.path && u.stateT > 0.5) {
+        this.moveAlongPath(u, dt, 1.1);
+        this.enemyTryFire(u, dt, true);
+        break;
+      }
+      if (u.suppression > 68) {
+        // pinned: stay low, return inaccurate fire, do not advance
+        u.moving = false;
+        u.path = null;
+        u.stance = 'crouch';
+        this.enemyTryFire(u, dt, false);
+        break;
+      }
       const preferred = u.weaponCfg ? Math.min(u.weaponCfg.range * 0.8, (u.enemyType === 'sniper' ? 900 : u.enemyType === 'scout' || u.enemyType === 'flanker' ? 220 : 520)) : 400;
       const tooClose = d < preferred * 0.35 && (u.enemyType === 'sniper' || u.enemyType === 'heavy');
       if (d > preferred * 1.15 && u.enemyType !== 'sniper') {
@@ -392,58 +548,134 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
   }
 };
 
+/* ---------- noise events: gunfire, explosions, sprinting ---------- */
+Battle.prototype.emitNoise = function (x, y, radius, team) {
+  this.noise = this.noise || [];
+  this.noise.push({ x, y, t: this.time, r: radius || 520, team: team || 'ally' });
+  if (this.noise.length > 24) this.noise.shift();
+};
+Battle.prototype.pruneNoise = function () {
+  if (!this.noise) return;
+  const cut = this.time - 4;
+  this.noise = this.noise.filter((n) => n.t >= cut);
+};
+
+function angleDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  return Math.abs(d);
+}
+
+Battle.prototype.enemyConfidence = function (u) {
+  const mates = this.enemies.filter((e) => e !== u && !e.dead);
+  let nearby = 0;
+  for (const e of mates) if (Math.abs(e.x - u.x) < 520) nearby++;
+  const leader = this.enemies.some((e) => !e.dead && e.enemyType === 'commander');
+  const hp = u.hp / u.maxHp;
+  let c = 0.35 + Math.min(0.3, nearby * 0.08) + (leader ? 0.15 : 0) + hp * 0.25;
+  if (u.suppression > 50) c -= 0.18;
+  return clamp(c, 0, 1);
+};
+
 Battle.prototype.enemyPerceive = function (u) {
   if (u.dead) return;
+  this.pruneNoise();
   const eye = unitEye(u);
   const range = u.viewRange || 620;
-  let best = null, bestD = 1e9;
+  const facing = u.aimAngle != null ? u.aimAngle : (u.dir > 0 ? 0 : Math.PI);
+  let best = null, bestScore = -1e9;
+  let sawAny = false;
   for (const a of this.allies) {
     if (a.dead || a.downed) continue;
-    const d = Math.abs(a.x - u.x);
-    if (d > range) continue;
     const c = unitCenter(a);
-    if (!lineOfSight(this.level, eye.x, eye.y, c.x, c.y, {})) continue;
-    // stealth / prone reduces detection a little
-    let eff = d * (a.stance === 'prone' ? 1.15 : a.stance === 'crouch' ? 1.08 : 1);
-    if (a.suppression > 60) eff *= 0.9;
-    // avoid every hostile stacking onto one soldier
-    const crowd = this.enemies.reduce((n, e) => n + (e !== u && !e.dead && e.target === a ? 1 : 0), 0);
-    eff += crowd * 150;
-    if (eff < bestD) { bestD = eff; best = a; }
+    const d = Math.hypot(c.x - eye.x, c.y - eye.y);
+    if (d > range) continue;
+    const los = lineOfSight(this.level, eye.x, eye.y, c.x, c.y, {});
+    if (!los) continue;
+    const ang = Math.atan2(c.y - eye.y, c.x - eye.x);
+    const inFov = angleDiff(ang, facing) < 1.02 || d < 90;
+    // peripheral vision detects slowly; foveal vision detects fast
+    const base = inFov ? 0.75 : 0.18;
+    const stealth = a.stance === 'prone' ? 0.45 : a.stance === 'crouch' ? 0.72 : 1;
+    const score = base * (1 - d / range) * stealth;
+    sawAny = true;
+    u.awareness = clamp((u.awareness || 0) + (inFov ? 0.5 : 0.14) * stealth, 0, 1);
+    if (score > bestScore) { bestScore = score; best = a; }
   }
-  if (best) {
-    u.target = best;
+  if (!sawAny) u.awareness = clamp((u.awareness || 0) - 0.13, 0, 1);
+
+  // hearing: gunfire and explosions draw attention even through cover
+  let heard = null;
+  for (const n of this.noise || []) {
+    if (n.team === 'enemy') continue;
+    const d = Math.hypot(n.x - u.x, (n.y - u.y) * 1.6);
+    if (d < n.r) { heard = n; break; }
+  }
+  if (heard && (!best || u.awareness < 0.6)) {
+    u.awareness = clamp((u.awareness || 0) + 0.4, 0, 1);
+    u.alertPos = { x: heard.x, y: heard.y };
+    u.heardT = this.time;
+    if (u.aiState === 'patrol') { u.aiState = 'alert'; u.stateT = 0; }
+  }
+
+  // acquire when awareness crosses threshold (close targets are noticed instantly)
+  const canAcquire = best && (u.awareness > 0.55 || Math.abs(best.x - u.x) < 130);
+  if (canAcquire) {
     if (u.target !== best) u.targetSince = this.time;
+    u.target = best;
     u.lastSeen = { x: best.x, y: best.y };
     u.lastSeenT = this.time;
     u.alertPos = { x: best.x, y: best.y };
-    if (u.aiState === 'patrol' || u.aiState === 'investigate' || u.aiState === 'alert') {
-      const wasPassive = u.aiState === 'patrol' || u.aiState === 'investigate';
+    if (u.aiState === 'patrol' || u.aiState === 'investigate' || u.aiState === 'alert' || u.aiState === 'search') {
+      const wasPassive = u.aiState === 'patrol' || u.aiState === 'investigate' || u.aiState === 'search';
       u.aiState = 'alert';
-      u.stateT = u.aiState === 'alert' ? u.stateT : 0;
-      u.reactT = Math.max(u.reactT || 0, (0.18 + Math.random() * 0.3) * (u.react || 1) * (this.diff ? 1 : 1));
+      if (!wasPassive) u.stateT = 0;
+      u.reactT = Math.max(u.reactT || 0, (0.18 + Math.random() * 0.3) * (u.react || 1));
       if (wasPassive && !u.contacted) {
         u.contacted = true;
-        this.addFeed('CONTACT — ' + (u.enemyName || 'hostile') + (best && Math.abs(best.x - u.x) < 220 ? ' — CLOSE' : ''), 'warn');
+        this.addFeed('CONTACT — ' + (u.enemyName || 'hostile') + (Math.abs(best.x - u.x) < 220 ? ' — CLOSE' : ''), 'warn');
       }
     }
   } else if (u.target) {
-    if (this.time - (u.lastSeenT || 0) > 2.2) {
+    const stale = this.time - (u.lastSeenT || 0);
+    if (stale > 2.2 || !best) {
       u.target = null;
-      u.aiState = 'investigate';
-      u.stateT = 0;
+      if (u.lastSeen) { u.aiState = 'search'; u.searchPts = null; u.stateT = 0; }
+      else { u.aiState = 'patrol'; u.stateT = 0; }
       u.path = null;
     }
   }
-  // periodic target rotation so hostiles spread fire across the squad
-  if (u.target && !u.target.dead && this.time - (u.targetSince || 0) > 2.6) {
-    u.target = null; // re-acquire with crowd penalty next tick
-  }
   if (u.target && u.target.dead) { u.target = null; u.aiState = 'patrol'; u.stateT = 0; }
+  // confidence drives aggression and retreat
+  u.confidence = this.enemyConfidence(u);
 };
 
 Battle.prototype.enemyCoord = function (u) {
   if (u.dead || this.time % 4 > 0.25) return;
+  // commander aura: nearby hostiles steady and coordinate
+  const boss = this.enemies.find((e) => !e.dead && e.enemyType === 'commander');
+  if (boss) {
+    for (const e of this.enemies) {
+      if (e === boss || e.dead) continue;
+      if (Math.abs(e.x - boss.x) < 560) {
+        e.commanderBuff = true;
+        e.react = Math.max(0.6, e.react * 0.998);
+        if (this.time % 4 < 0.2 && e.aiState === 'patrol' && u.alertPos) {
+          e.alertPos = { ...u.alertPos };
+          e.aiState = 'alert';
+          e.stateT = 0;
+        }
+      } else e.commanderBuff = false;
+    }
+  }
+  // assign tactical roles: heavies pin, fast units flank, rest hold the line
+  for (const e of this.enemies) {
+    if (e.dead || e.aiState !== 'engage') continue;
+    if (e.enemyType === 'heavy' || (e.weaponCfg && /LIGHT MACHINE/.test(e.weaponCfg.cls || ''))) e.tactic = 'suppress';
+    else if (e.enemyType === 'flanker' || e.enemyType === 'scout') e.tactic = 'flank';
+    else e.tactic = 'line';
+  }
   const workers = this.enemies.filter((e) => !e.dead && e.aiState !== 'patrol' && e.lastSeen);
   if (!workers.length) return;
   const lead = workers[0];

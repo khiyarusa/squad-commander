@@ -412,10 +412,19 @@ input[type=range]::-moz-range-thumb{width:12px;height:16px;background:var(--acce
   border:1px solid var(--line);border-left:2px solid var(--accent);min-height:34px;
   backdrop-filter:blur(4px);
 }
+.obj .obj-detail{margin-left:auto;font-size:9px;letter-spacing:.1em;color:var(--accent);white-space:nowrap}
 .selected-strip .ss-name{font-size:14px;font-weight:700;letter-spacing:.05em;white-space:nowrap}
 .selected-strip .ss-role{font-size:9px;letter-spacing:.2em;color:var(--olive);text-transform:uppercase;white-space:nowrap}
 .selected-strip .ss-need{font-size:11px;color:var(--muted);font-family:var(--font-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selected-strip .ss-bars{display:flex;gap:10px;margin-left:auto;align-items:center}
+.cmdq{display:flex;gap:4px;align-items:center;max-width:44vw;overflow-x:auto;scrollbar-width:none}
+.cmdq::-webkit-scrollbar{display:none}
+.cmdq-chip{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 2px 0 5px;font-size:8.5px;letter-spacing:.1em;
+  color:#d9d3c2;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);white-space:nowrap}
+.cmdq-chip b{color:var(--accent);font-weight:700}
+.cmdq-chip.is-active{border-color:rgba(227,166,63,.62);color:var(--accent)}
+.cmdq-chip button{width:14px;height:14px;line-height:12px;padding:0;border:0;background:rgba(255,255,255,.07);color:#cfc7b2;font-size:11px;cursor:pointer}
+.cmdq-chip button:hover{background:var(--danger);color:#fff}
 .ssbar{width:74px}
 .ssbar .lab{font-size:8px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between}
 .ssbar .tr{height:4px;background:rgba(255,255,255,.12);margin-top:2px;overflow:hidden}
@@ -1237,10 +1246,11 @@ function icon(name, cls = 'ico') {
 /* ============================================================
    02 — DATA DEFINITIONS
    ============================================================ */
-const GAME_VERSION = '1.0.0';
-const SAVE_KEY = 'squadcommander.save.v2';
-const SAVE_BACKUP = 'squadcommander.save.v2.bak';
-const SAVE_VERSION = 2;
+const GAME_VERSION = '2.0.0';
+const SAVE_KEY = 'squadcommander.save.v3';
+const SAVE_BACKUP = 'squadcommander.save.v3.bak';
+const SAVE_PENDING = 'squadcommander.save.v3.pending';
+const SAVE_VERSION = 3;
 
 const SETTINGS_DEFAULT = {
   master: 0.85, sfx: 0.85, music: 0.5,
@@ -1458,7 +1468,7 @@ const MISSIONS = [
     id: 'm02', region: 0, name: 'NO MAN LEFT BEHIND', type: 'SEARCH & RESCUE', theme: 'urban', tod: 'dusk',
     seed: 1102, width: 3600, heights: [620, 572, 500, 572, 620], coverDensity: 1.1,
     timeLimit: 480, par: 150, threat: 2,
-    deploy: { x: 0.05, spread: 110, width: 170 }, evac: { x: 0.94 },
+    deploy: { x: 0.05, spread: 110, width: 170 }, evac: { x: 0.94 }, extractPolicy: 'vip',
     objectives: [
       { type: 'rescue', x: 0.72, label: 'Locate and treat the downed pilot', seconds: 3.5, tag: 'pilot' },
       { type: 'extract', label: 'Extract the pilot' }
@@ -1503,7 +1513,7 @@ const MISSIONS = [
       { type: 'interact', x: 0.36, label: 'Plant charge — antenna A', seconds: 5 },
       { type: 'interact', x: 0.64, label: 'Plant charge — antenna B', seconds: 5 },
       { type: 'extract', label: 'Fall back to extraction' }
-    ],
+    ], extractPolicy: 'all',
     optional: [{ type: 'noKia', label: 'No soldiers killed' }],
     enemies: [
       { type: 'rifleman', x: 0.28 }, { type: 'sniper', x: 0.48 },
@@ -1562,7 +1572,7 @@ const MISSIONS = [
     objectives: [
       { type: 'rescueUnits', tags: ['hostage1', 'hostage2'], seconds: 2.6, label: 'Free the hostages' },
       { type: 'extract', label: 'Extract hostages and squad' }
-    ],
+    ], extractPolicy: 'all',
     optional: [{ type: 'noKia', label: 'No soldiers killed' }],
     enemies: [
       { type: 'rifleman', x: 0.3 }, { type: 'rifleman', x: 0.42 },
@@ -1670,7 +1680,7 @@ const MISSIONS = [
     objectives: [
       { type: 'killTarget', tag: 'warlord', label: 'Eliminate the warlord' },
       { type: 'extract', label: 'Extract the squad' }
-    ],
+    ], extractPolicy: 'commander',
     optional: [{ type: 'noKia', label: 'No soldiers killed' }],
     enemies: [
       { type: 'rifleman', x: 0.3 }, { type: 'flanker', x: 0.42 },
@@ -2247,6 +2257,95 @@ const Art = (() => {
   }
 
   /* ---------------- props & cover ---------------- */
+  /* ---------------- elevated walkways & stairs ---------------- */
+  function drawPlatforms(c, level, view) {
+    const pal = level.paletteData;
+    const rail = level.theme === 'industrial' ? '#5a615c' : level.theme === 'forest' ? '#5a4a32' : '#6a6152';
+    const beam = level.theme === 'industrial' ? '#3c423f' : level.theme === 'forest' ? '#3a2f20' : '#474034';
+    for (const p of level.platforms) {
+      if (p.x2 < view.left - 140 || p.x1 > view.right + 140) continue;
+      const y = p.y;
+      // support legs down to whatever ground is beneath
+      c.strokeStyle = 'rgba(18,18,14,.55)';
+      c.lineWidth = 5;
+      for (let sx = p.x1 + 24; sx < p.x2 - 8; sx += 118) {
+        const gy = level.surfaceAt(sx);
+        c.beginPath(); c.moveTo(sx, y + 6); c.lineTo(sx + 3, gy); c.stroke();
+        c.lineWidth = 3;
+        c.beginPath(); c.moveTo(sx - 8, y + 24); c.lineTo(sx + 14, y + 24); c.stroke();
+        c.lineWidth = 5;
+      }
+      // deck
+      const g = c.createLinearGradient(0, y, 0, y + 16);
+      g.addColorStop(0, level.theme === 'industrial' ? '#6b7470' : '#7c6a49');
+      g.addColorStop(1, beam);
+      c.fillStyle = g;
+      c.fillRect(p.x1, y - 4, p.x2 - p.x1, 14);
+      // planks / seams
+      c.strokeStyle = 'rgba(20,18,14,.4)';
+      c.lineWidth = 1;
+      for (let sx = p.x1 + 12; sx < p.x2; sx += 26) {
+        c.beginPath(); c.moveTo(sx, y - 3); c.lineTo(sx, y + 9); c.stroke();
+      }
+      // top edge highlight
+      c.fillStyle = 'rgba(255,235,190,.16)';
+      c.fillRect(p.x1, y - 4, p.x2 - p.x1, 1.2);
+      // railing (back side)
+      c.strokeStyle = rail;
+      c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(p.x1, y - 30); c.lineTo(p.x2, y - 30); c.stroke();
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(p.x1, y - 16); c.lineTo(p.x2, y - 16); c.stroke();
+      for (let sx = p.x1 + 6; sx <= p.x2 - 4; sx += 32) {
+        c.beginPath(); c.moveTo(sx, y - 4); c.lineTo(sx, y - 30); c.stroke();
+      }
+      // end posts
+      c.fillStyle = rail;
+      c.fillRect(p.x1 - 2, y - 32, 4, 30);
+      c.fillRect(p.x2 - 2, y - 32, 4, 30);
+      // hanging lamp for industrial
+      if (level.theme === 'industrial' && level.quality !== 'low') {
+        const lx = (p.x1 + p.x2) / 2;
+        c.strokeStyle = 'rgba(20,20,16,.6)'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(lx, y - 30); c.lineTo(lx, y - 56); c.stroke();
+        c.fillStyle = 'rgba(240,190,110,.85)';
+        c.beginPath(); c.arc(lx, y - 57, 3, 0, TAU); c.fill();
+        const lg = c.createRadialGradient(lx, y - 57, 2, lx, y - 57, 46);
+        lg.addColorStop(0, 'rgba(255,200,110,.16)');
+        lg.addColorStop(1, 'rgba(255,200,110,0)');
+        c.fillStyle = lg; c.beginPath(); c.arc(lx, y - 57, 46, 0, TAU); c.fill();
+      }
+    }
+    // stairs
+    for (const st of level.stairs) {
+      if (st.x2 < view.left - 100 || st.x1 > view.right + 100) continue;
+      const n = Math.max(6, Math.round(Math.abs(st.x2 - st.x1) / 12));
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n, t1 = (i + 1) / n;
+        const x0 = st.x1 + (st.x2 - st.x1) * t0;
+        const x1 = st.x1 + (st.x2 - st.x1) * t1;
+        const y0 = st.y1 + (st.y2 - st.y1) * t0;
+        const y1 = st.y1 + (st.y2 - st.y1) * t1;
+        const g = c.createLinearGradient(0, Math.min(y0, y1), 0, Math.max(y0, y1) + 10);
+        g.addColorStop(0, level.theme === 'industrial' ? '#606965' : '#7a6948');
+        g.addColorStop(1, beam);
+        c.fillStyle = g;
+        c.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0) + 1, Math.abs(y1 - y0) + 10);
+        c.fillStyle = 'rgba(255,240,200,.13)';
+        c.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0) + 1, 1);
+      }
+      // handrail along the slope
+      c.strokeStyle = rail; c.lineWidth = 1.3;
+      c.beginPath(); c.moveTo(st.x1, st.y1 - 30); c.lineTo(st.x2, st.y2 - 30); c.stroke();
+      for (let i = 0; i <= n; i += 2) {
+        const tt = i / n;
+        const sx = st.x1 + (st.x2 - st.x1) * tt;
+        const sy = st.y1 + (st.y2 - st.y1) * tt;
+        c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx, sy - 30); c.stroke();
+      }
+    }
+  }
+
   function drawCover(c, cov, level) {
     if (cov.dead) {
       // rubble remains
@@ -2903,7 +3002,7 @@ const Art = (() => {
 
   return {
     rr, poly, limb, lensFlare, paletteFor, getTile, drawSky, drawSun, drawStars,
-    surfaceAt, drawTerrain, drawPlatformFaces, drawCover, drawProp, drawZone,
+    surfaceAt, drawTerrain, drawPlatformFaces, drawPlatforms, drawCover, drawProp, drawZone,
     drawUnit, drawWeaponShape, muzzleOf, drawMuzzleFlash, drawTracer, drawPortrait,
     MUZZLE_LEN
   };
@@ -3302,7 +3401,7 @@ const Stage = {
   onDown(e) {
     if (!this.handlers) return;
     AudioSys.unlock();
-    this.canvas.setPointerCapture && this.canvas.setPointerCapture(e.pointerId);
+    try { this.canvas.setPointerCapture && this.canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-released pointer */ }
     this.pointers.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false });
     if (this.pointers.size === 2) {
       const pts = [...this.pointers.values()];
@@ -3323,6 +3422,7 @@ const Stage = {
       const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       const ratio = d / Math.max(1, this.pinch.dist);
       this.cam.zoom = clamp(this.pinch.zoom * ratio, this.cam.minZoom || 0.72, this.cam.maxZoom || 1.45);
+      this.cam.tz = this.cam.zoom; // keep the zoom target in sync with the pinch
       // pan by midpoint
       const mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
       const s = this.scale * this.cam.zoom;
@@ -3365,6 +3465,7 @@ const Stage = {
     if (!this.cam) return;
     const delta = -e.deltaY * 0.0016;
     this.cam.zoom = clamp(this.cam.zoom + delta, this.cam.minZoom || 0.72, this.cam.maxZoom || 1.45);
+    this.cam.tz = this.cam.zoom; // wheel zoom sticks
     if (this.handlers.cameraMoved) this.handlers.cameraMoved();
     this.canvas.classList.add('zooming');
     clearTimeout(this._zt);
@@ -3379,9 +3480,12 @@ const Stage = {
 };
 
 function makeCamera(x, y) {
+  // short (phone) viewports start zoomed out a touch so ground-level units
+  // stay clear of the bottom HUD stack
+  const z = (Stage.h && Stage.h < 520) ? 0.78 : 1;
   return {
-    x, y, zoom: 1, minZoom: 0.74, maxZoom: 1.4,
-    tx: x, ty: y, tz: 1, shake: 0, shakeX: 0, shakeY: 0,
+    x, y, zoom: z, minZoom: 0.74, maxZoom: 1.4,
+    tx: x, ty: y, tz: z, shake: 0, shakeX: 0, shakeY: 0,
     bounds: { minX: 0, maxX: 4000, minY: 300, maxY: 430 },
     follow: null, smooth: 6
   };
@@ -3560,8 +3664,65 @@ class ParticleSystem {
 /* ===== 06-world.js ===== */
 'use strict';
 /* ============================================================
-   06 — WORLD: level construction, navigation, line of sight
+   06 — WORLD: multi-tier level construction, 2D navigation, LOS
+   ------------------------------------------------------------
+   The battlefield is a side-view tactical space with a ground
+   profile, elevated walkways and stairs. Navigation is an
+   explicit graph over all walkable surfaces. Solid props block
+   nodes; vaultable props create costly traverse edges that
+   disappear when the prop is destroyed.
    ============================================================ */
+
+const COVER_MATERIALS = {
+  sandbag:  { material: 'sandbag',  hardness: 2, protection: 0.82, density: 1.0 },
+  concrete: { material: 'concrete', hardness: 3, protection: 0.92, density: 1.4 },
+  rock:     { material: 'concrete', hardness: 3, protection: 0.94, density: 1.5 },
+  crate:    { material: 'wood',     hardness: 1, protection: 0.55, density: 0.7 },
+  log:      { material: 'wood',     hardness: 1, protection: 0.62, density: 0.8 },
+  wall:     { material: 'brick',    hardness: 2, protection: 0.86, density: 1.3 },
+  container:{ material: 'metal',    hardness: 2, protection: 0.74, density: 1.1 },
+  wreck:    { material: 'metal',    hardness: 2, protection: 0.68, density: 1.0 },
+  barrel:   { material: 'metal',    hardness: 1, protection: 0.45, density: 0.6 }
+};
+
+function makeCover(id, x, y, type, w, h, seed) {
+  const mat = COVER_MATERIALS[type] || COVER_MATERIALS.crate;
+  const hp = 110 + h * 2.4 * mat.density;
+  return {
+    id, x, y, w, h, type, material: mat.material, hardness: mat.hardness,
+    protection: mat.protection, coverValue: h / 50,
+    maxHp: hp, hp, dead: false, explosive: type === 'barrel',
+    solid: type === 'container' || type === 'wall' || type === 'wreck',
+    vaultable: type !== 'wall',
+    occupants: [], claims: [], claimT: {}, reservedBy: null, seed: seed || 0
+  };
+}
+
+function addPlatform(level, x1, len, clearance, id) {
+  const W = level.width;
+  x1 = Math.round(clamp(x1, 280, W - 680));
+  const x2 = Math.round(Math.min(W - 180, x1 + len));
+  let minGround = Infinity;
+  for (let x = x1; x <= x2; x += 12) minGround = Math.min(minGround, level.surfaceAt(x));
+  const y = Math.round(Math.min(minGround - clearance, 610));
+  if (y < 300) return null;
+  const stairW = 78;
+  const leftBottom = Math.max(40, x1 - stairW);
+  const rightBottom = Math.min(W - 40, x2 + stairW);
+  const p = { id: id || 'pl' + level.platforms.length, x1, x2, y, tier: 1, kind: 'platform' };
+  level.platforms.push(p);
+  const leftGy = level.surfaceAt(leftBottom);
+  const rightGy = level.surfaceAt(rightBottom);
+  level.stairs.push({
+    id: p.id + '_sl', platformId: p.id, side: 'left', tier: 0.5,
+    x1: leftBottom, x2: x1, y1: leftGy, y2: y, width: 26
+  });
+  level.stairs.push({
+    id: p.id + '_sr', platformId: p.id, side: 'right', tier: 0.5,
+    x1: x2, x2: rightBottom, y1: y, y2: rightGy, width: 26
+  });
+  return p;
+}
 
 function buildLevel(mission) {
   const W = mission.width;
@@ -3585,11 +3746,14 @@ function buildLevel(mission) {
   const level = {
     mission, width: W, seed: mission.seed, theme: mission.theme, tod: mission.tod,
     segments, paletteData: Art.paletteFor(mission.theme, mission.tod),
-    covers: [], decor: [], props: [], zones: [], navNodes: [],
-    neutrals: [], quality: 'high', weather: 0
+    covers: [], decor: [], props: [], zones: [], navNodes: [], platforms: [], stairs: [],
+    neutrals: [], quality: 'high', weather: 0, navDirty: true, navRevision: 0,
+    navReport: null, exposureT: 0
   };
   const rng = mulberry32(mission.seed);
   level.surfaceAt = (xx) => Art.surfaceAt(level, xx);
+  level.floorAt = (xx, xy) => floorAt(level, xx, xy);
+  level.floorCandidates = (xx) => floorCandidates(level, xx);
 
   /* ---- decorative ground detail ---- */
   const decorCount = Math.floor(W / 26);
@@ -3600,6 +3764,15 @@ function buildLevel(mission) {
     else if (r < 0.82) level.decor.push({ type: 'stone', x: dx, r: 2 + rng() * 5 });
     else if (r < 0.94) level.decor.push({ type: 'debris', x: dx, w: 4 + rng() * 12, rot: rng() * 3 });
     else level.decor.push({ type: 'crack', x: dx, dx: 4 + rng() * 10 });
+  }
+
+  /* ---- elevated walkways (genuine 2D verticality) ---- */
+  if (W > 2600) {
+    addPlatform(level, W * (0.23 + rng() * 0.05), 290 + rng() * 90, 118, 'pl0');
+    addPlatform(level, W * (0.56 + rng() * 0.07), 270 + rng() * 90, 118, 'pl1');
+  }
+  for (const p of level.platforms) {
+    level.props.push({ type: 'walkway', x: (p.x1 + p.x2) / 2, y: p.y, x1: p.x1, x2: p.x2, platform: p, seed: p.x1 });
   }
 
   /* ---- cover objects ---- */
@@ -3616,29 +3789,34 @@ function buildLevel(mission) {
   const deployCenter = mission.deploy.x * W;
   const avoidLeft = deployCenter + (mission.deploy.width || 180) * 0.6;
   const totalCovers = Math.floor(9 * density) + 4;
+  const nearStair = (cx) => level.stairs.some((s) => cx > s.x1 - 34 && cx < s.x2 + 34);
   for (let i = 0; i < totalCovers; i++) {
     let cvx = 220 + (i + 0.5) * ((W - 380) / totalCovers) + (rng() - 0.5) * 100;
     cvx = clamp(cvx, 160, W - 160);
     if (cvx < avoidLeft && Math.abs(cvx - deployCenter) < 130) cvx += 220;
+    if (nearStair(cvx)) cvx += 130;
     const type = coverTypes[Math.floor(rng() * coverTypes.length)];
     const [w, h] = coverDims[type];
     const y = level.surfaceAt(cvx);
-    level.covers.push({
-      id: 'cv' + i, x: cvx, y, w, h, type, maxHp: 120 + h * 2.2, hp: 120 + h * 2.2,
-      dead: false, explosive: type === 'barrel', coverValue: h / 50, occupants: []
-    });
+    level.covers.push(makeCover('cv' + i, cvx, y, type, w, h, i));
   }
-  // a couple of guaranteed forward covers
+  // guaranteed forward covers
   [0.34, 0.5, 0.66, 0.82].forEach((f, i) => {
     const cx = clamp(f * W + (i % 2 ? -70 : 60), 200, W - 200);
+    if (nearStair(cx)) return;
     const y = level.surfaceAt(cx);
-    if (!level.covers.some((c) => Math.abs(c.x - cx) < 70)) {
-      level.covers.push({
-        id: 'cvx' + i, x: cx, y, w: 64, h: 46, type: i % 2 ? 'concrete' : 'sandbag',
-        maxHp: 240, hp: 240, dead: false, explosive: false, coverValue: 1, occupants: []
-      });
+    if (!level.covers.some((c) => Math.abs(c.x - cx) < 70 && Math.abs(c.y - y) < 24)) {
+      level.covers.push(makeCover('cvx' + i, cx, y, i % 2 ? 'concrete' : 'sandbag', 64, 46, 100 + i));
     }
   });
+  // platform cover: one firing position per walkway, never on the stair mouth
+  let plCoverIdx = 0;
+  for (const p of level.platforms) {
+    const cx = p.x1 + (p.x2 - p.x1) * (0.38 + rng() * 0.2);
+    level.covers.push(makeCover('cvp' + (plCoverIdx++), cx, p.y, rng() < 0.5 ? 'sandbag' : 'crate', 52, 36, 200 + plCoverIdx));
+    const ex = p.x2 - 42;
+    if (ex > cx + 60) level.covers.push(makeCover('cvp' + (plCoverIdx++), ex, p.y, 'crate', 44, 34, 300 + plCoverIdx));
+  }
 
   /* ---- background props ---- */
   const propCount = Math.floor(W / 420);
@@ -3654,20 +3832,20 @@ function buildLevel(mission) {
 
   /* ---- objective zones & props ---- */
   const pts = (mission.points || {});
-  const buildZoneY = (x) => level.surfaceAt(x);
+  void pts;
   for (const obj of mission.objectives) {
     if (obj.type === 'hold') {
       const zx = obj.x * W;
-      level.zones.push({ id: obj.type + '_' + level.zones.length, type: 'hold', x: zx, y: buildZoneY(zx), w: obj.width || 200, seconds: obj.seconds, label: obj.label, objective: obj });
+      level.zones.push({ id: obj.type + '_' + level.zones.length, type: 'hold', x: zx, y: level.surfaceAt(zx), w: obj.width || 200, seconds: obj.seconds, label: obj.label, objective: obj });
     } else if (obj.type === 'interact') {
       const ix = obj.x * W;
-      level.zones.push({ id: obj.type + '_' + level.zones.length, type: 'interact', x: ix, y: buildZoneY(ix), w: 64, seconds: obj.seconds, label: obj.label, objective: obj });
-      level.props.push({ type: mission.theme === 'industrial' ? 'console' : 'antenna', x: ix, y: buildZoneY(ix), powered: true, objective: obj });
+      level.zones.push({ id: obj.type + '_' + level.zones.length, type: 'interact', x: ix, y: level.surfaceAt(ix), w: 64, seconds: obj.seconds, label: obj.label, objective: obj });
+      level.props.push({ type: mission.theme === 'industrial' ? 'console' : 'antenna', x: ix, y: level.surfaceAt(ix), powered: true, objective: obj });
     }
   }
   const evx = (mission.evac ? mission.evac.x : 0.94) * W;
-  level.zones.push({ id: 'evac', type: 'evac', x: evx, y: buildZoneY(evx), w: 150, label: 'EXTRACTION' });
-  level.evac = { x: evx, y: buildZoneY(evx) };
+  level.zones.push({ id: 'evac', type: 'evac', x: evx, y: level.surfaceAt(evx), w: 150, label: 'EXTRACTION' });
+  level.evac = { x: evx, y: level.surfaceAt(evx) };
 
   /* ---- neutral units ---- */
   for (const obj of mission.objectives) {
@@ -3689,7 +3867,7 @@ function buildLevel(mission) {
     }
   }
 
-  /* ---- deployment slots ---- */
+  /* ---- deployment slots (ground, on a walkable node) ---- */
   const dc = mission.deploy.x * W;
   const slots = [];
   for (let i = 0; i < 6; i++) {
@@ -3698,78 +3876,442 @@ function buildLevel(mission) {
   }
   level.deploySlots = slots;
 
-  /* ---- nav graph ---- */
-  const nodes = [];
-  const step = 24;
-  for (let nx = 12; nx < W - 12; nx += step) {
-    nodes.push({ i: nodes.length, x: nx, y: level.surfaceAt(nx) });
-  }
-  for (let i = 0; i < nodes.length; i++) {
-    nodes[i].next = i > 0 ? i - 1 : -1;
-    nodes[i].prev = i < nodes.length - 1 ? i + 1 : -1;
-  }
-  level.navNodes = nodes;
-  level.navStep = step;
+  buildNavGraph(level);
+  validateLevelReachability(level);
   return level;
 }
 
-function navIndexAt(level, x) {
-  const n = level.navNodes;
-  if (!n.length) return 0;
-  return clamp(Math.round((x - n[0].x) / level.navStep), 0, n.length - 1);
+/* ============================================================
+   Walkable surfaces and floor queries
+   ============================================================ */
+function floorCandidates(level, x) {
+  const out = [{ y: level.surfaceAt(x), id: 'ground', kind: 'ground', tier: 0 }];
+  for (const p of level.platforms) {
+    if (x >= p.x1 - 0.5 && x <= p.x2 + 0.5) out.push({ y: p.y, id: p.id, kind: 'platform', tier: 1 });
+  }
+  for (const s of level.stairs) {
+    if (x >= s.x1 - 0.5 && x <= s.x2 + 0.5) {
+      const t = (x - s.x1) / Math.max(1, s.x2 - s.x1);
+      out.push({ y: s.y1 + (s.y2 - s.y1) * t, id: s.id, kind: 'stair', tier: s.tier });
+    }
+  }
+  return out.sort((a, b) => a.y - b.y);
 }
 
-/* A* over the surface chain (nodes are bidirectional) */
-function findPath(level, fromX, toX) {
-  const nodes = level.navNodes;
-  if (!nodes.length) return null;
-  const start = navIndexAt(level, fromX);
-  const goal = navIndexAt(level, toX);
-  if (start === goal) return [{ x: toX, y: level.surfaceAt(toX) }];
-  const open = [start];
-  const came = new Map();
-  const gScore = new Map([[start, 0]]);
-  const fScore = new Map([[start, Math.abs(nodes[start].x - nodes[goal].x)]]);
-  const visited = new Set();
-  let guard = 0;
-  while (open.length && guard++ < 5000) {
-    // pick lowest f (small graph, fine)
-    let bi = 0;
-    for (let i = 1; i < open.length; i++) if ((fScore.get(open[i]) || 1e9) < (fScore.get(open[bi]) || 1e9)) bi = i;
-    const cur = open.splice(bi, 1)[0];
-    if (cur === goal) {
-      const path = [];
-      let c = cur;
-      while (c != null) { path.push({ x: nodes[c].x, y: nodes[c].y }); c = came.has(c) ? came.get(c) : null; }
-      path.reverse();
-      path.push({ x: toX, y: level.surfaceAt(toX) });
-      // compress collinear points
-      const out = [];
-      for (let i = 0; i < path.length; i++) {
-        if (i === 0 || i === path.length - 1) { out.push(path[i]); continue; }
-        const a = path[i - 1], b = path[i], c2 = path[i + 1];
-        const cross = (b.x - a.x) * (c2.y - a.y) - (b.y - a.y) * (c2.x - a.x);
-        if (Math.abs(cross) > 0.8) out.push(b);
-      }
-      return out;
-    }
-    visited.add(cur);
-    const neighbors = [nodes[cur].next, nodes[cur].prev].filter((v) => v != null && v >= 0 && !visited.has(v));
-    for (const nb of neighbors) {
-      const d = Math.abs(nodes[nb].x - nodes[cur].x) + Math.abs(nodes[nb].y - nodes[cur].y) * 1.6;
-      const tg = (gScore.get(cur) || 0) + d;
-      if (tg < (gScore.get(nb) != null ? gScore.get(nb) : 1e9)) {
-        came.set(nb, cur);
-        gScore.set(nb, tg);
-        fScore.set(nb, tg + Math.abs(nodes[nb].x - nodes[goal].x));
-        if (!open.includes(nb)) open.push(nb);
-      }
-    }
+function floorAt(level, x, hintY) {
+  const c = floorCandidates(level, x);
+  if (hintY == null) return c[c.length - 1];
+  let best = c[0], bd = Math.abs(c[0].y - hintY);
+  for (let i = 1; i < c.length; i++) {
+    const d = Math.abs(c[i].y - hintY);
+    if (d < bd) { bd = d; best = c[i]; }
+  }
+  return best;
+}
+
+/* surface id a unit is currently standing on */
+function surfaceOf(level, x, y) {
+  return floorAt(level, x, y).id;
+}
+
+function inSolid(level, x, y) {
+  for (const cov of level.covers) {
+    if (cov.dead || !cov.solid) continue;
+    if (Math.abs(x - cov.x) <= cov.w / 2 + 2 && y > cov.y - cov.h - 2 && y <= cov.y + 8) return cov;
   }
   return null;
 }
 
-/* ---------------- line of sight & raycasts ---------------- */
+/* ============================================================
+   Navigation graph
+   ============================================================ */
+function buildNavGraph(level) {
+  const nodes = [];
+  const W = level.width;
+  const add = (x, y, surface, tier, surfaceRef) => {
+    const n = { i: nodes.length, x, y, surface, tier, surfaceRef, blocked: false, exposure: 0, hazard: 0, crowd: 0 };
+    nodes.push(n);
+    return n;
+  };
+
+  // ground nodes
+  const gstep = 28;
+  const ground = [];
+  for (let x = 18; x < W - 18; x += gstep) ground.push(add(x, level.surfaceAt(x), 'ground', 0, null));
+  // platform nodes
+  const plat = {};
+  for (const p of level.platforms) {
+    plat[p.id] = [];
+    for (let x = p.x1 + 10; x < p.x2 - 6; x += gstep) {
+      plat[p.id].push(add(x, p.y, p.id, 1, p));
+    }
+  }
+  // stair nodes
+  const stair = {};
+  for (const s of level.stairs) {
+    stair[s.id] = [];
+    const steps = Math.max(4, Math.round(Math.abs(s.x2 - s.x1) / 14));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = s.x1 + (s.x2 - s.x1) * t;
+      const y = s.y1 + (s.y2 - s.y1) * t;
+      stair[s.id].push(add(x, y, s.id, s.tier, s));
+    }
+  }
+  level.navNodes = nodes;
+  const edges = nodes.map(() => []);
+  const addEdge = (a, b, opts) => {
+    if (a == null || b == null || a === b) return;
+    const c = opts || {};
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const cost = d + (c.extra || 0) + Math.abs(b.y - a.y) * 0.45;
+    edges[a.i].push({ to: b.i, cost, vault: c.vault || null, vaults: c.vaults || null, drop: !!c.drop, stair: !!c.stair });
+    edges[b.i].push({ to: a.i, cost, vault: c.vault || null, vaults: c.vaults || null, drop: !!c.drop, stair: !!c.stair });
+  };
+
+  // mark blocked ground nodes (solid props)
+  for (const n of ground) {
+    const solid = inSolid(level, n.x, n.y);
+    if (solid) { n.blocked = true; n.solidId = solid.id; }
+    for (const c of level.covers) {
+      if (!c.dead && c.explosive && Math.abs(c.x - n.x) < 65 && Math.abs(c.y - n.y) < 40) n.hazard = Math.max(n.hazard, 1);
+    }
+  }
+  for (const p of level.platforms) {
+    for (const n of plat[p.id]) {
+      const solid = inSolid(level, n.x, n.y);
+      if (solid) { n.blocked = true; n.solidId = solid.id; }
+    }
+  }
+
+  // ground adjacency with vault edges over solids
+  for (let i = 0; i < ground.length; i++) {
+    if (ground[i].blocked) continue;
+    let j = i + 1;
+    const vaults = [];
+    let impossible = false;
+    while (j < ground.length && ground[j].blocked) {
+      const cov = level.covers.find((c) => c.id === ground[j].solidId);
+      if (!cov || !cov.vaultable) { impossible = true; break; }
+      if (!vaults.includes(cov)) vaults.push(cov);
+      j++;
+    }
+    if (impossible || j >= ground.length) continue;
+    const span = ground[j].x - ground[i].x;
+    if (j === i + 1) {
+      addEdge(ground[i], ground[j], {});
+    } else if (span < 320 && vaults.length) {
+      addEdge(ground[i], ground[j], {
+        extra: 110 + vaults.reduce((sum, c) => sum + c.w, 0) * 0.6,
+        vault: vaults[0], vaults
+      });
+    }
+  }
+  // long-range connections across a chain of vaultable props
+  for (let i = 0; i < ground.length; i++) {
+    if (ground[i].blocked) continue;
+    for (let k = 2; k <= 12; k++) {
+      const j = i + k;
+      if (j >= ground.length || ground[j].blocked) continue;
+      if (ground[j].x - ground[i].x > 336) break;
+      // skip if there is a normal path already through unblocked nodes
+      let blocked = 0;
+      for (let m = i + 1; m < j; m++) if (ground[m].blocked) blocked++;
+      if (blocked < 3) continue;
+      const vaults = [];
+      let ok = true;
+      for (let m = i + 1; m < j; m++) {
+        if (!ground[m].blocked) continue;
+        const cov = level.covers.find((c) => c.id === ground[m].solidId);
+        if (!cov || !cov.vaultable) { ok = false; break; }
+        if (!vaults.includes(cov)) vaults.push(cov);
+      }
+      if (ok && vaults.length) addEdge(ground[i], ground[j], { extra: 120 + vaults.reduce((sum, c) => sum + c.w, 0) * 0.7, vault: vaults[0], vaults });
+    }
+  }
+
+  // platform adjacency
+  for (const p of level.platforms) {
+    const list = plat[p.id];
+    for (let i = 0; i < list.length - 1; i++) addEdge(list[i], list[i + 1], {});
+  }
+
+  // stair adjacency + links
+  for (const s of level.stairs) {
+    const list = stair[s.id];
+    for (let i = 0; i < list.length - 1; i++) addEdge(list[i], list[i + 1], { stair: true, extra: 2 });
+    const bottom = s.side === 'left' ? list[0] : list[list.length - 1];
+    const top = s.side === 'left' ? list[list.length - 1] : list[0];
+    // bottom -> nearest ground node
+    let bg = null, bgd = 90;
+    for (const g of ground) { const d = Math.hypot(g.x - bottom.x, g.y - bottom.y); if (d < bgd) { bgd = d; bg = g; } }
+    if (bg) addEdge(bottom, bg, { extra: 8 });
+    // top -> nearest platform node
+    const p = level.platforms.find((q) => q.id === s.platformId);
+    if (p) {
+      let bp = null, bpd = 90;
+      for (const q of plat[p.id]) { const d = Math.hypot(q.x - top.x, q.y - top.y); if (d < bpd) { bpd = d; bp = q; } }
+      if (bp) addEdge(top, bp, { extra: 8 });
+    }
+  }
+
+  // drop-down edges: walkway edge to the ground below
+  for (const p of level.platforms) {
+    for (const q of plat[p.id]) {
+      if (q.blocked) continue;
+      if (q.x - p.x1 > 26 && p.x2 - q.x > 26) continue;
+      let bg = null, bd = 60;
+      for (const g of ground) { const d = Math.hypot(g.x - q.x, g.y - q.y); if (d < bd) { bd = d; bg = g; } }
+      if (bg) addEdge(q, bg, { extra: 55, drop: true });
+    }
+  }
+
+  level.navEdges = edges;
+  level.navStats = {
+    nodes: nodes.length,
+    edges: edges.reduce((s, e) => s + e.length, 0) / 2,
+    blocked: nodes.filter((n) => n.blocked).length,
+    platforms: level.platforms.length,
+    stairs: level.stairs.length
+  };
+  level.navDirty = false;
+  level.navRevision++;
+}
+
+function rebuildNav(level) {
+  buildNavGraph(level);
+  // preserve exposure values for nodes at similar positions
+  validateLevelReachability(level);
+}
+
+function nearestNavNode(level, x, y, preferSurface) {
+  let best = null, bd = Infinity;
+  for (const n of level.navNodes) {
+    if (n.blocked) continue;
+    let d = Math.hypot(n.x - x, (n.y - y) * 2.4);
+    if (preferSurface && n.surface !== preferSurface) d += 18;
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+
+/* A* over the graph; cost includes exposure, hazard and crowd pressure. */
+function findPath(level, fromX, fromY, toX, toY, opts) {
+  // backwards-compatible 3-argument form: findPath(level, fromX, toX)
+  if (toX === undefined) { toX = fromY; fromY = floorAt(level, fromX).y; toY = floorAt(level, toX).y; }
+  if (!level.navNodes || level.navDirty) buildNavGraph(level);
+  const nodes = level.navNodes;
+  if (!nodes.length) return null;
+  const o = opts || {};
+  if (fromY == null) fromY = floorAt(level, fromX).y;
+  if (toY == null) toY = floorAt(level, toX).y;
+  const start = nearestNavNode(level, fromX, fromY);
+  let goal = nearestNavNode(level, toX, toY);
+  if (!start || !goal) return null;
+
+  // direct same-surface shortcut
+  if (Math.abs(fromY - toY) < 24 && Math.abs(start.y - goal.y) < 24 && walkClear(level, fromX, fromY, toX, toY)) {
+    return [{ x: toX, y: toY }];
+  }
+
+  const n = nodes.length;
+  const g = new Float64Array(n).fill(Infinity);
+  const f = new Float64Array(n).fill(Infinity);
+  const came = new Int32Array(n).fill(-1);
+  const cameEdge = new Array(n).fill(null);
+  const closed = new Uint8Array(n);
+  const open = [start.i];
+  const inOpen = new Uint8Array(n);
+  inOpen[start.i] = 1;
+  g[start.i] = 0;
+  const h = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) * 0.86 + Math.abs(a.tier - b.tier) * 12;
+  f[start.i] = h(start, goal);
+  let guard = 0;
+  let found = false;
+  while (open.length && guard++ < 12000) {
+    let bi = 0;
+    for (let i = 1; i < open.length; i++) if (f[open[i]] < f[open[bi]]) bi = i;
+    const cur = open.splice(bi, 1)[0];
+    inOpen[cur] = 0;
+    if (cur === goal.i) { found = true; break; }
+    if (closed[cur]) continue;
+    closed[cur] = 1;
+    const node = nodes[cur];
+    const es = level.navEdges[cur];
+    for (let ei = 0; ei < es.length; ei++) {
+      const e = es[ei];
+      if (closed[e.to]) continue;
+      const nb = nodes[e.to];
+      if (nb.blocked) continue;
+      const crowd = nb.crowd || 0;
+      const extra = (nb.exposure || 0) * 62 + (nb.hazard || 0) * 85 + crowd * 22 + (node.exposure || 0) * 20;
+      const tg = g[cur] + e.cost + extra;
+      if (tg < g[e.to]) {
+        g[e.to] = tg;
+        came[e.to] = cur;
+        cameEdge[e.to] = e;
+        f[e.to] = tg + h(nb, goal);
+        if (!inOpen[e.to]) { open.push(e.to); inOpen[e.to] = 1; }
+      }
+    }
+  }
+  if (!found) {
+    // last resort: direct if the same floor is horizontally clear
+    if (Math.abs(fromY - toY) < 26 && walkClear(level, fromX, fromY, toX, toY)) return [{ x: toX, y: toY }];
+    return null;
+  }
+  const chain = [];
+  let c = goal.i;
+  while (c !== -1 && chain.length < 400) { chain.push(c); c = came[c]; }
+  chain.reverse();
+  const pts = [];
+  for (let i = 0; i < chain.length; i++) {
+    const nd = nodes[chain[i]];
+    const prev = pts[pts.length - 1];
+    if (prev && Math.abs(prev.x - nd.x) < 0.6 && Math.abs(prev.y - nd.y) < 0.6) continue;
+    pts.push({ x: nd.x, y: nd.y, surface: nd.surface, tier: nd.tier, node: nd.i });
+    // apex over a vaulted solid
+    if (i < chain.length - 1) {
+      const e = cameEdge[chain[i + 1]];
+      if (e && e.vaults) {
+        for (const v of e.vaults) pts.push({ x: v.x, y: v.y - v.h - 5, surface: 'vault', tier: nd.tier, vault: true });
+      } else if (e && e.vault) {
+        pts.push({ x: e.vault.x, y: e.vault.y - e.vault.h - 5, surface: 'vault', tier: nd.tier, vault: true });
+      }
+    }
+  }
+  // remove redundant collinear points on the same surface
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (i > 0 && i < pts.length - 1) {
+      const a = pts[i - 1], b = pts[i + 1];
+      if (p.surface === a.surface && p.surface === b.surface && !p.vault &&
+          Math.abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) < 2.5 &&
+          (b.x - a.x) * (p.x - a.x) >= 0) continue;
+    }
+    out.push(p);
+  }
+  // the unit is usually standing between graph nodes; drop the leading
+  // node it has effectively already reached so it does not walk backwards
+  while (out.length > 1 && Math.hypot(out[0].x - fromX, out[0].y - fromY) < 20) out.shift();
+  const dest = floorAt(level, toX, toY);
+  const last = out[out.length - 1];
+  if (!last || Math.abs(last.x - toX) > 0.6 || Math.abs(last.y - dest.y) > 0.6) {
+    out.push({ x: toX, y: dest.y, surface: dest.id, tier: dest.tier });
+  }
+  return out;
+}
+
+/* True when a straight horizontal-ish walk between two points crosses no solid prop. */
+function walkClear(level, ax, ay, bx, by) {
+  if (Math.abs(ay - by) > 26) return false;
+  const dx = bx - ax, dy = by - ay;
+  const steps = Math.max(3, Math.ceil(Math.abs(dx) / 12));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const x = ax + dx * t, y = ay + dy * t;
+    for (const cov of level.covers) {
+      if (cov.dead || !cov.solid) continue;
+      if (Math.abs(x - cov.x) < cov.w / 2 + 2 && y > cov.y - cov.h - 2 && y <= cov.y + 8) return false;
+    }
+  }
+  return true;
+}
+
+/* Flood fill from deploy; remove non-vaultable solids if a critical point is cut off. */
+function reachableNodes(level, startNodes) {
+  const seen = new Uint8Array(level.navNodes.length);
+  const q = [];
+  for (const s of startNodes) { if (s && !seen[s.i]) { seen[s.i] = 1; q.push(s.i); } }
+  while (q.length) {
+    const c = q.pop();
+    for (const e of level.navEdges[c]) {
+      if (seen[e.to]) continue;
+      seen[e.to] = 1;
+      q.push(e.to);
+    }
+  }
+  return seen;
+}
+
+function validateLevelReachability(level) {
+  const targets = [
+    { x: level.evac.x, y: level.evac.y, label: 'evac' },
+    ...level.zones.filter((z) => z.type !== 'evac').map((z) => ({ x: z.x, y: z.y, label: z.id })),
+    ...level.neutrals.map((n) => ({ x: n.x, y: n.y, label: 'neutral:' + n.tag }))
+  ];
+  const starts = level.deploySlots.map((s) => nearestNavNode(level, s.x, s.y)).filter(Boolean);
+  let seen = reachableNodes(level, starts);
+  const unreachable = [];
+  for (const t of targets) {
+    const n = nearestNavNode(level, t.x, t.y);
+    if (!n || !seen[n.i]) unreachable.push(t.label);
+  }
+  let removed = 0;
+  if (unreachable.length) {
+    // destroy non-vaultable barriers that sit between deploy and the target
+    for (const cov of level.covers) {
+      if (cov.dead || !cov.solid || cov.vaultable) continue;
+      cov.dead = true;
+      cov.destroyedByNav = true;
+      removed++;
+    }
+    if (removed) {
+      buildNavGraph(level);
+      seen = reachableNodes(level, level.deploySlots.map((s) => nearestNavNode(level, s.x, s.y)).filter(Boolean));
+    }
+  }
+  const still = [];
+  for (const t of targets) {
+    const n = nearestNavNode(level, t.x, t.y);
+    if (!n || !seen[n.i]) still.push(t.label);
+  }
+  level.navReport = {
+    reachable: still.length === 0,
+    unreachable: still,
+    removedSolids: removed,
+    before: unreachable,
+    stats: level.navStats
+  };
+  if (still.length) console.warn('NAV: unreachable targets after repair:', still.join(','));
+  return level.navReport;
+}
+
+/* 4 Hz threat map for route cost + cover evaluation. */
+function updateNavExposure(level, enemies, dt) {
+  level.exposureT = (level.exposureT || 0) + dt;
+  if (level.exposureT < 0.25) return;
+  level.exposureT = 0;
+  const live = enemies.filter((e) => !e.dead && !e.downed);
+  for (const n of level.navNodes) {
+    let visible = false;
+    let checked = 0;
+    for (const e of live) {
+      if (Math.abs(e.x - n.x) > 760) continue;
+      if (checked++ >= 3) break;
+      if (lineOfSight(level, e.x, e.y - (e.stance === 'crouch' ? 26 : 42), n.x, n.y - 20)) { visible = true; break; }
+    }
+    const target = visible ? 1 : 0;
+    n.exposure = n.exposure == null ? target : n.exposure + (target - n.exposure) * 0.5;
+  }
+  // crowd pressure from allies, updated cheaply
+  const units = level._crowdUnits;
+  if (units) {
+    for (const n of level.navNodes) n.crowd = 0;
+    for (const u of units) {
+      if (u.dead || u.downed) continue;
+      const near = nearestNavNode(level, u.x, u.y);
+      if (near) near.crowd = Math.min(1, (near.crowd || 0) + 0.35);
+    }
+  }
+}
+
+/* ============================================================
+   Cover evaluation, reservation and line of sight
+   ============================================================ */
+function coverRect(cov) { return { x: cov.x - cov.w / 2, y: cov.y - cov.h, w: cov.w, h: cov.h }; }
+
 function rayRectT(ax, ay, bx, by, r) {
   const dx = bx - ax, dy = by - ay;
   let tmin = 0, tmax = 1;
@@ -3791,8 +4333,6 @@ function rayRectT(ax, ay, bx, by, r) {
   }
   return tmin;
 }
-
-function coverRect(cov) { return { x: cov.x - cov.w / 2, y: cov.y - cov.h, w: cov.w, h: cov.h }; }
 
 function terrainBlocked(level, ax, ay, bx, by) {
   const d = Math.hypot(bx - ax, by - ay);
@@ -3825,7 +4365,6 @@ function raycastCover(level, ax, ay, bx, by) {
   return best;
 }
 
-/* sample terrain along a shot for impact point */
 function terrainHitT(level, ax, ay, bx, by) {
   const d = Math.hypot(bx - ax, by - ay);
   const steps = clamp(Math.ceil(d / 8), 3, 220);
@@ -3837,33 +4376,86 @@ function terrainHitT(level, ax, ay, bx, by) {
   return null;
 }
 
-function findNearbyCover(level, x, threatX, maxDist = 300) {
+function coverExpiry(cov) {
+  if (!cov.claimT) cov.claimT = {};
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+  const live = [];
+  for (const id of (cov.claims || [])) {
+    const t = cov.claimT[id];
+    if (t == null || now - t < 8) live.push(id);
+    else delete cov.claimT[id];
+  }
+  cov.claims = live;
+  return live;
+}
+
+function claimCover(cov, unitId, duration) {
+  if (!cov) return;
+  if (!cov.claims) cov.claims = [];
+  if (!cov.claimT) cov.claimT = {};
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+  if (!cov.claims.includes(unitId)) {
+    if (coverExpiry(cov).length >= 2) return false;
+    cov.claims.push(unitId);
+  }
+  cov.claimT[unitId] = now - Math.max(0, 8 - (duration == null ? 8 : duration));
+  return true;
+}
+
+function releaseCover(cov, unitId) {
+  if (!cov) return;
+  if (cov.claims) cov.claims = cov.claims.filter((id) => id !== unitId);
+  if (cov.claimT) delete cov.claimT[unitId];
+  if (cov.occupants) cov.occupants = cov.occupants.filter((id) => id !== unitId);
+}
+
+/* Evaluate a cover for a unit against a threat; vertical threats make low cover useless. */
+function coverScore(level, cov, x, threatX, threatY) {
+  if (!cov || cov.dead) return -Infinity;
+  const d = Math.abs(cov.x - x);
+  let side = 0;
+  if (threatX != null) {
+    const between = (cov.x - x) * (threatX - cov.x) >= -8;
+    side = between ? 0 : d * 0.9;
+  }
+  let vertical = 0;
+  if (threatY != null && threatY < cov.y - 32) vertical = 120; // threat is above the cover
+  const claims = coverExpiry(cov).length;
+  return cov.protection * 90 + cov.h / 2 - d * 0.55 - side - claims * 70 - vertical;
+}
+
+function findNearbyCover(level, x, threatX, maxDist = 300, threatY, unitY) {
   let best = null;
+  const base = unitY == null ? floorAt(level, x).y : unitY;
   for (const cov of level.covers) {
     if (cov.dead) continue;
+    if (Math.abs(cov.y - base) > 34) continue;
     const d = Math.abs(cov.x - x);
     if (d > maxDist) continue;
-    if (threatX != null) {
-      const between = (cov.x - x) * (threatX - cov.x) > 0 || Math.abs(cov.x - threatX) < Math.abs(x - threatX);
-      if (!between && d > 80) continue;
-    }
-    const claims = cov.claims ? cov.claims.length : 0;
-    const score = d + claims * 150;
-    if (!best || score < best.d) best = { cov, d: score };
+    if (coverExpiry(cov).length >= 2) continue;
+    const score = coverScore(level, cov, x, threatX, threatY);
+    if (!best || score > best.score) best = { cov, score, d };
   }
   if (!best) return null;
   const sign = threatX != null && threatX > best.cov.x ? 1 : -1;
-  const tx = clamp(best.cov.x - sign * (best.cov.w / 2 + 11), 20, level.width - 20);
-  return { cover: best.cov, x: tx, y: level.surfaceAt(tx) };
-}
-
-function claimCover(cov, unitId) {
-  if (!cov.claims) cov.claims = [];
-  if (!cov.claims.includes(unitId)) cov.claims.push(unitId);
+  const tx = clamp(best.cov.x - sign * (best.cov.w / 2 + 12), 20, level.width - 20);
+  const fl = floorAt(level, tx, best.cov.y);
+  return { cover: best.cov, x: tx, y: fl.y, score: best.score };
 }
 
 function coversNear(level, x, maxDist) {
   return level.covers.filter((c) => !c.dead && Math.abs(c.x - x) < maxDist);
+}
+
+/* material-specific bullet penetration */
+function bulletPenetration(cfg) {
+  if (!cfg) return 0;
+  if (cfg.grenade) return 0;
+  const cls = cfg.cls || '';
+  if (/SNIPER/.test(cls)) return 3;
+  if (/LIGHT MACHINE/.test(cls)) return 2;
+  if (/SHOTGUN/.test(cls)) return 2;
+  return 1;
 }
 
 
@@ -4060,6 +4652,10 @@ function effectiveSpread(u) {
   s *= 1 + (u.recoil || 0) * 0.12;
   if (u.moving) s *= 1.15;
   s *= 1 + (100 - u.stamina) / 300;
+  const moraleMul = 0.72 + (u.morale == null ? 100 : u.morale) / 360;
+  s /= Math.max(0.55, moraleMul);
+  if (u.injury === 'light') s *= 1.1;
+  if (u.injury === 'serious') s *= 1.3;
   return s;
 }
 
@@ -4095,6 +4691,14 @@ class Battle {
     this.orderMode = 'move';
     this.queueMode = false;
     this.formation = 'line';
+    this.customFormation = null;
+    this.previewPoint = null;
+    this.commandSeq = 0;
+    this.ordersIssued = 0;
+    this.ordersCompleted = 0;
+    this.ordersFailed = 0;
+    this.navT = 0;
+    this.extractPolicy = mission.extractPolicy || 'all';
     this.inspected = null;
     this.allies = [];
     this.enemies = [];
@@ -4176,7 +4780,18 @@ class Battle {
       let x = e.x != null ? e.x * W : 0.6 * W;
       if (e.x > 0 && e.x < 1) x = e.x * W;
       x = clamp(x, 80, W - 80);
-      const u = createEnemy(e.type, x, this.level.surfaceAt(x), this.diff, e.tag);
+      let ey = this.level.surfaceAt(x);
+      let onPlatform = null;
+      for (const p of this.level.platforms) {
+        if (x > p.x1 + 30 && x < p.x2 - 30) { onPlatform = p; break; }
+      }
+      if (onPlatform && (e.tier === 1 || (!e.tier && Math.abs(x - onPlatform.x1 - (onPlatform.x2 - onPlatform.x1) * 0.55) < 110))) {
+        if (e.tier === 1 || (e.type === 'sniper' || e.type === 'heavy' || Math.abs(x / W - 0.5) < 0.15)) {
+          ey = onPlatform.y;
+          x = clamp(x, onPlatform.x1 + 14, onPlatform.x2 - 14);
+        }
+      }
+      const u = createEnemy(e.type, x, ey, this.diff, e.tag);
       if (e.tag) u.tag = e.tag;
       u.battle = this;
       if (this.mission.tod === 'night') u.viewRange = (u.viewRange || 600) * 0.85;
@@ -4292,8 +4907,13 @@ class Battle {
   }
   toggleQueue() { this.queueMode = !this.queueMode; AudioSys.click(); UI.refreshCommandDeck(this); }
   cycleFormation() {
-    const f = ['line', 'column', 'wedge', 'defensive'];
-    this.formation = f[(f.indexOf(this.formation) + 1) % f.length];
+    const f = ['line', 'column', 'wedge', 'defensive', 'custom'];
+    const next = f[(f.indexOf(this.formation) + 1) % f.length];
+    if (next === 'custom' && !this.customFormation) {
+      if (!this.captureCustomFormation()) { this.formation = 'line'; }
+    } else {
+      this.formation = next;
+    }
     this.addFeed('Formation: ' + this.formation.toUpperCase());
     AudioSys.ui('confirm');
     UI.refreshCommandDeck(this);
@@ -4310,7 +4930,7 @@ class Battle {
 
   addFeed(text, cls = '') {
     this.feed.push({ id: ++this.feedSeq, text, cls, time: this.time });
-    if (this.feed.length > 42) this.feed.shift();
+    if (this.feed.length > 36) this.feed.shift();
     if (UI && UI.pushFeed) UI.pushFeed(this, text, cls);
   }
 
@@ -4330,6 +4950,87 @@ class Battle {
     return out;
   }
 
+  /* Real 2D, role-aware formation slots resolved to walkable floors. */
+  formationSlots(units, wx, wy, threatX) {
+    const live = units.filter((u) => !u.dead && !u.downed);
+    const n = live.length;
+    if (!n) return [];
+    const base = this.level.floorAt(wx, wy);
+    const sign = threatX != null ? Math.sign(threatX - wx) || 1 : 1;
+    const roleDepth = { assault: 34, rifleman: 12, support: -8, commander: -30, medic: -44, sniper: -58 };
+    const slots = [];
+    const custom = this.formation === 'custom' ? this.customFormation : null;
+    if (custom && custom.length) {
+      const cx = custom.reduce((s, o) => s + o.dx, 0) / custom.length;
+      const cy = custom.reduce((s, o) => s + o.dy, 0) / custom.length;
+      for (let i = 0; i < n; i++) {
+        const off = custom[i % custom.length];
+        const sx = clamp(wx + (off.dx - cx) * sign, 22, this.level.width - 22);
+        const sy = clamp((wy + (off.dy - cy)), 0, 2000);
+        const fl = this.level.floorAt(sx, sy);
+        slots.push({ x: sx, y: fl.y, surface: fl.id, role: live[i].role, tier: fl.tier });
+      }
+      return slots;
+    }
+    // role ordering: commander/medic rear, assault front, sniper seeks high ground
+    const order = live.map((u, i) => i).sort((a, b) => {
+      const score = (u) => u.role === 'assault' ? -2 : u.role === 'commander' ? 2 : u.role === 'medic' ? 3 : u.role === 'sniper' ? 4 : 0;
+      return score(live[a]) - score(live[b]);
+    });
+    for (let k = 0; k < n; k++) {
+      const u = live[order[k]];
+      let sx, sy, fl;
+      if (this.formation === 'column') {
+        sx = wx - sign * k * 24;
+        fl = this.level.floorAt(sx, wy);
+      } else if (this.formation === 'wedge') {
+        const depth = Math.ceil(k / 2) * 30;
+        sx = wx - sign * depth + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 22;
+        fl = this.level.floorAt(sx, wy);
+      } else if (this.formation === 'defensive') {
+        const ring = [0, -1, 1, -2, 2, -3, 3];
+        sx = wx + (ring[k] || 0) * 30;
+        fl = this.level.floorAt(sx, wy);
+      } else {
+        sx = wx + (k - (n - 1) / 2) * 36;
+        fl = this.level.floorAt(sx, wy);
+      }
+      // role depth relative to threat direction
+      sx = clamp(sx + sign * (roleDepth[u.role] || 0) * 0.6, 22, this.level.width - 22);
+      fl = this.level.floorAt(sx, wy);
+      // sniper prefers a nearby walkway if it is meaningfully higher
+      if (u.role === 'sniper' || this.formation === 'defensive') {
+        let best = null;
+        for (const p of this.level.platforms) {
+          if (wx < p.x1 - 160 || wx > p.x2 + 160) continue;
+          if (p.y > fl.y - 50) continue;
+          const d = Math.abs((p.x1 + p.x2) / 2 - wx);
+          if (!best || d < best.d) best = { p, d };
+        }
+        if (best) {
+          const px = clamp(wx, best.p.x1 + 20, best.p.x2 - 20);
+          fl = { y: best.p.y, id: best.p.id, tier: 1, kind: 'platform' };
+          sx = px;
+        }
+      }
+      slots.push({ x: sx, y: fl.y, surface: fl.id, role: u.role, tier: fl.tier });
+    }
+    return slots;
+  }
+
+  captureCustomFormation() {
+    const live = this.selectedUnits.filter((u) => !u.dead && !u.downed);
+    if (live.length < 2) return false;
+    const cx = live.reduce((s, u) => s + u.x, 0) / live.length;
+    const cy = live.reduce((s, u) => s + u.y, 0) / live.length;
+    this.customFormation = live.map((u) => ({ dx: u.x - cx, dy: u.y - cy }));
+    this.formation = 'custom';
+    this.addFeed('Custom formation captured');
+    AudioSys.ui('confirm');
+    UI.refreshCommandDeck(this);
+    return true;
+  }
+
   issueOrder(kind, wx, wy, targetUnit) {
     const units = this.selectedUnits;
     if (!units.length) { this.addFeed('No soldiers selected', 'warn'); AudioSys.ui('deny'); return false; }
@@ -4337,33 +5038,64 @@ class Battle {
     if (kind === 'heal' && (!targetUnit || targetUnit.team !== 'ally')) {
       this.addFeed('Select a soldier to treat', 'warn'); AudioSys.ui('deny'); return false;
     }
-    const offsets = this.formationOffsets(units.length);
+    if (kind === 'carry' && (!targetUnit || targetUnit.team !== 'ally' || !targetUnit.downed)) {
+      this.addFeed('Select a downed soldier to carry', 'warn'); AudioSys.ui('deny'); return false;
+    }
+    const threat = this.enemies.find((e) => !e.dead);
+    const slots = this.formationSlots(units, wx, wy, threat ? threat.x : null);
+    this.formationPreview = { x: wx, y: wy, slots: slots.slice(), t: 2.2, kind };
     let issued = 0;
     units.forEach((u, i) => {
+      const slot = slots[i] || { x: clamp(wx, 22, this.level.width - 22), y: this.level.floorAt(wx, wy).y };
       let order = null;
-      const destX = clamp(wx + (offsets[i] || 0), 24, this.level.width - 24);
       switch (kind) {
-        case 'move': order = { type: 'move', x: destX, y: this.level.surfaceAt(destX) }; break;
-        case 'sprint': order = { type: 'sprint', x: destX, y: this.level.surfaceAt(destX) }; break;
+        case 'move':
+        case 'sprint':
+          order = { type: kind, x: slot.x, y: slot.y, slot: i };
+          break;
         case 'cover': {
-          const searchX = clamp(wx + (offsets[i] || 0) * 1.1, 40, this.level.width - 40);
-          const found = findNearbyCover(this.level, searchX, this.enemies.length ? this.nearestEnemyX(u) : null, 460);
-          if (found) { claimCover(found.cover, u.id); order = { type: 'cover', x: found.x, y: found.y, coverId: found.cover.id }; }
-          else order = { type: 'move', x: destX, y: this.level.surfaceAt(destX) };
+          const found = findNearbyCover(this.level, slot.x, threat ? threat.x : null, 460, threat ? threat.y : null, slot.y);
+          if (found) order = { type: 'cover', x: found.x, y: found.y, coverId: found.cover.id, slot: i };
+          else order = { type: 'move', x: slot.x, y: slot.y, slot: i };
           break;
         }
-        case 'overwatch': order = { type: 'overwatch', x: wx, y: wy }; break;
-        case 'suppress': order = { type: 'suppress', x: wx, y: wy }; break;
-        case 'focus': order = { type: 'focus', targetId: targetUnit.id }; break;
-        case 'hold': order = { type: 'hold' }; break;
-        case 'follow': order = { type: 'follow' }; break;
-        case 'reload': order = { type: 'reload' }; break;
-        case 'heal': order = { type: 'heal', targetId: targetUnit.id }; break;
-        case 'retreat': order = { type: 'retreat', x: this.deployCenter, y: this.level.surfaceAt(this.deployCenter) }; break;
+        case 'overwatch':
+          order = { type: 'overwatch', x: wx, y: wy, angle: Math.atan2(wy - u.y, wx - u.x), halfAngle: 0.58 };
+          break;
+        case 'suppress':
+          order = { type: 'suppress', x: wx, y: wy };
+          break;
+        case 'focus':
+          order = { type: 'focus', targetId: targetUnit.id };
+          break;
+        case 'hold':
+          order = { type: 'hold', x: u.x, y: u.y };
+          break;
+        case 'follow':
+          order = { type: 'follow' };
+          break;
+        case 'reload':
+          order = { type: 'reload' };
+          break;
+        case 'heal':
+          order = { type: 'heal', targetId: targetUnit.id };
+          break;
+        case 'carry':
+          order = { type: 'carry', targetId: targetUnit.id };
+          break;
+        case 'dropcarry':
+          order = { type: 'dropcarry' };
+          break;
+        case 'wait':
+          order = { type: 'wait', seconds: 4, untilCalm: false };
+          break;
+        case 'retreat':
+          order = { type: 'retreat', x: this.deployCenter, y: this.level.floorAt(this.deployCenter).y };
+          break;
         case 'regroup': {
           const cmd = this.aliveAllies.find((a) => a.role === 'commander') || this.aliveAllies[0];
           const gx = cmd ? cmd.x : this.deployCenter;
-          order = { type: 'regroup', x: clamp(gx + (offsets[i] || 0), 24, this.level.width - 24), y: this.level.surfaceAt(gx) };
+          order = { type: 'regroup', x: gx + (slot.x - wx) * 0.5, y: cmd ? cmd.y : this.level.floorAt(gx).y };
           break;
         }
         default: order = null;
@@ -4371,27 +5103,26 @@ class Battle {
       if (!order) return;
       order.stamp = this.time;
       order.mode = kind;
-      this.pushOrder(u, order);
-      issued++;
+      if (this.pushOrder(u, order)) issued++;
     });
     if (issued) {
       const label = {
         move: 'MOVE', sprint: 'SPRINT', cover: 'TAKE COVER', overwatch: 'OVERWATCH',
         suppress: 'SUPPRESS', focus: 'FOCUS FIRE', hold: 'HOLD', follow: 'FOLLOW',
-        reload: 'RELOAD', heal: 'TREAT', retreat: 'RETREAT', regroup: 'REGROUP'
+        reload: 'RELOAD', heal: 'TREAT', retreat: 'RETREAT', regroup: 'REGROUP',
+        carry: 'CARRY', dropcarry: 'DROP CASUALTY', wait: 'WAIT'
       }[kind] || kind.toUpperCase();
       this.addFeed(`${label} — ${issued} soldier${issued > 1 ? 's' : ''}`, 'good');
       AudioSys.ui('confirm');
       this.ripples.push({ x: wx, y: wy, t: 0, kind });
+      for (const sl of (this.formationPreview ? this.formationPreview.slots : [])) {
+        this.ripples.push({ x: sl.x, y: sl.y, t: 0, kind: 'slot' });
+      }
       if (['move', 'sprint', 'cover', 'retreat', 'regroup'].includes(kind)) {
         const lead = units.find((u) => !u.dead) || units[0];
         if (lead) { this.cam.follow = lead; this.cam.follow.lookAhead = Math.sign(wx - lead.x) * 90; }
       }
-      if (kind === 'focus' || kind === 'suppress' || kind === 'cover' || kind === 'overwatch') {
-        // keep mode armed for repeated use; move mode stays default
-      } else if (kind !== 'heal') {
-        this.orderMode = 'move';
-      }
+      if (!['focus', 'suppress', 'cover', 'overwatch', 'heal', 'carry'].includes(kind)) this.orderMode = 'move';
       UI.refreshCommandDeck(this);
       return true;
     }
@@ -4402,110 +5133,283 @@ class Battle {
     let best = null, bd = 1e9;
     for (const e of this.enemies) {
       if (e.dead) continue;
-      const d = Math.abs(e.x - u.x);
+      const d = Math.hypot(e.x - u.x, (e.y - u.y) * 1.5);
       if (d < bd) { bd = d; best = e; }
     }
     return best ? best.x : null;
   }
 
+  makeCommand(order) {
+    const persistent = ['hold', 'follow', 'overwatch', 'suppress', 'focus', 'carry'].includes(order.type);
+    return Object.assign({}, order, {
+      id: 'cmd' + (++this.commandSeq),
+      seq: this.commandSeq,
+      state: 'queued',
+      persistent,
+      reason: null,
+      createdAt: this.time,
+      startedAt: null,
+      timeout: order.timeout || (persistent ? 0 : 0)
+    });
+  }
+
   pushOrder(u, order) {
-    if (u.dead) return;
-    if (this.queueMode && u.order) {
-      if (u.queue.length < 4) {
-        u.queue.push(order);
-        this.addFeed(`${u.callsign || u.name}: order queued (${u.queue.length})`);
-      }
-      return;
+    if (!u || u.dead) return false;
+    if (u.downed && order.type !== 'heal') { this.addFeed(`${u.callsign || u.name}: down — cannot take orders`, 'warn'); return false; }
+    const cmd = this.makeCommand(order);
+    if (this.queueMode && (u.order || u.queue.length)) {
+      if (u.queue.length >= 6) { this.addFeed(`${u.callsign || u.name}: queue full (6)`, 'warn'); AudioSys.ui('deny'); return false; }
+      u.queue.push(cmd);
+      this.ordersIssued++;
+      this.addFeed(`${u.callsign || u.name}: ${cmd.type.toUpperCase()} queued (${u.queue.length})`);
+      return true;
     }
+    // replacing an active order: retire it honestly and release its claims
+    if (u.order) {
+      const prev = u.order;
+      prev.state = 'cancelled';
+      prev.reason = 'replaced';
+      prev.completedAt = this.time;
+      if (prev.coverId) {
+        const cov = this.level.covers.find((c) => c.id === prev.coverId);
+        if (cov) releaseCover(cov, u.id);
+      }
+      if (prev.type === 'carry') this.dropCarried(u);
+      u.order = null;
+    }
+    for (const q of u.queue) { q.state = 'cancelled'; q.reason = 'replaced'; }
     u.queue = [];
-    this.startOrder(u, order);
+    this.ordersIssued++;
+    return this.startOrder(u, cmd);
   }
 
   startOrder(u, order) {
-    if (u.dead || u.downed) { u.order = null; return; }
+    if (!u || u.dead) return false;
+    if (u.downed && order.type !== 'heal') {
+      order.state = 'failed'; order.reason = 'incapacitated';
+      this.ordersFailed++;
+      return false;
+    }
+    if (!order.id) order = this.makeCommand(order);
+    const prev = u.order;
+    if (prev && prev.coverId && prev.type !== 'cover') {
+      const pc = this.level.covers.find((c) => c.id === prev.coverId);
+      if (pc) releaseCover(pc, u.id);
+    }
+    order.state = 'active';
+    order.startedAt = this.time;
     u.order = order;
+    u.lastCommand = order;
     u.path = null; u.pathI = 0;
     u.holding = false; u.following = false;
-    u.overwatch = null; u.suppressAt = null; u.coverId = null;
+    u.overwatch = null; u.suppressAt = null; u.focusId = null;
     u.healKitReserved = false;
+    u.sprint = false;
+    u.carryId = null;
     u.orderTime = this.time;
+    u.interrupt = null;
     switch (order.type) {
       case 'move':
       case 'sprint':
       case 'retreat':
       case 'regroup':
       case 'cover': {
-        const p = findPath(this.level, u.x, order.x);
-        if (p) { u.path = p; u.pathI = 0; }
-        else { this.addFeed(`${u.callsign || u.name}: no route`, 'warn'); this.completeOrder(u); }
+        const p = findPath(this.level, u.x, u.y, order.x, order.y);
+        if (p && p.length) { u.path = p; u.pathI = 0; }
+        else {
+          this.addFeed(`${u.callsign || u.name}: no route to objective`, 'warn');
+          this.failOrder(u, order, 'unreachable');
+          return false;
+        }
         if (order.type === 'sprint' || order.type === 'retreat') u.sprint = true;
-        if (order.type === 'cover') u.pendingCover = order.coverId;
+        if (order.type === 'cover') {
+          u.pendingCover = order.coverId;
+          const cov = this.level.covers.find((c) => c.id === order.coverId);
+          if (cov) claimCover(cov, u.id);
+        }
         break;
       }
       case 'hold':
         u.holding = true;
         u.path = null;
-        this.completeOrder(u);
         break;
       case 'follow':
         u.following = true;
-        this.completeOrder(u);
+        u.path = null;
         break;
       case 'overwatch':
-        u.overwatch = { x: order.x, y: order.y, t: 0 };
+        u.overwatch = { x: order.x, y: order.y, angle: order.angle != null ? order.angle : Math.atan2(order.y - u.y, order.x - u.x), halfAngle: order.halfAngle || 0.58, t: 0 };
         u.holding = true;
-        this.completeOrder(u);
+        u.path = null;
         break;
       case 'suppress':
         u.suppressAt = { x: order.x, y: order.y, t: 0 };
-        this.completeOrder(u);
+        u.path = null;
         break;
-      case 'focus':
-        u.focusId = order.targetId;
+      case 'focus': {
+        const target = this.enemies.find((e) => e.id === order.targetId && !e.dead);
+        if (!target) { this.failOrder(u, order, 'target lost'); return false; }
+        u.focusId = target.id;
         u.holding = true;
-        this.completeOrder(u);
         break;
+      }
       case 'reload':
+        if (!u.weaponCfg) { this.failOrder(u, order, 'no weapon'); return false; }
+        if (u.mag >= u.magSize) { this.completeOrder(u, 'magazine full'); return true; }
+        if (u.reserve <= 0) { this.failOrder(u, order, 'no reserve ammo'); return false; }
         this.startReload(u);
-        this.completeOrder(u);
         break;
-      case 'heal':
-        u.healTarget = this.allies.find((a) => a.id === order.targetId && !a.dead) || null;
-        if (!u.healTarget) this.completeOrder(u);
+      case 'heal': {
+        const target = this.allies.find((a) => a.id === order.targetId && !a.dead);
+        if (!target) { this.failOrder(u, order, 'patient lost'); return false; }
+        if (!target.downed && target.hp >= target.maxHp) { this.completeOrder(u, 'not wounded'); return true; }
+        if (u.medkits <= 0) { this.failOrder(u, order, 'no medical supplies'); return false; }
+        u.healTarget = target;
+        u.healT = 0;
+        if (Math.abs(target.x - u.x) > 34 || Math.abs(target.y - u.y) > 20) {
+          const p = findPath(this.level, u.x, u.y, target.x - Math.sign(target.x - u.x || 1) * 24, target.y);
+          if (p) { u.path = p; u.pathI = 0; }
+        }
+        break;
+      }
+      case 'carry': {
+        const target = this.allies.find((a) => a.id === order.targetId && !a.dead);
+        if (!target || !target.downed) { this.failOrder(u, order, 'casualty not down'); return false; }
+        if (target.carriedBy && target.carriedBy !== u.id) { this.failOrder(u, order, 'already carried'); return false; }
+        u.carryTargetId = target.id;
+        if (Math.abs(target.x - u.x) > 36 || Math.abs(target.y - u.y) > 24) {
+          const p = findPath(this.level, u.x, u.y, target.x + (u.x < target.x ? -22 : 22), target.y);
+          if (p) { u.path = p; u.pathI = 0; }
+        }
+        break;
+      }
+      case 'dropcarry':
+        this.dropCarried(u);
+        this.completeOrder(u, 'casualty dropped');
+        return true;
+      case 'wait':
+        u.waitT = order.seconds == null ? 4 : order.seconds;
+        u.waitUntilCalm = !!order.untilCalm;
         break;
     }
+    return true;
   }
 
-  completeOrder(u) {
-    const finished = u.order;
+  completeOrder(u, reason) {
+    const cmd = u.order;
+    if (!cmd) return false;
+    cmd.state = 'completed';
+    cmd.reason = reason || 'done';
+    cmd.completedAt = this.time;
+    u.lastCommand = cmd;
+    this.ordersCompleted++;
+    if (cmd.type === 'heal') { u.healTarget = null; u.healKitReserved = false; }
+    if (cmd.type === 'focus') u.focusId = null;
+    if (cmd.type === 'overwatch') u.overwatch = null;
+    if (cmd.type === 'suppress') u.suppressAt = null;
+    if (cmd.type === 'hold') u.holding = false;
+    if (cmd.type === 'follow') u.following = false;
+    if (cmd.type === 'carry') u.carryTargetId = null;
+    u.waitT = 0; u.waitUntilCalm = false;
     u.order = null;
     u.sprint = false;
+    u.path = null;
+    u.pathI = 0;
+    const queued = u.queue.length;
+    if (queued) {
+      const next = u.queue.shift();
+      this.startOrder(u, next);
+    }
+    if (cmd.type === 'cover' && queued === 0) {
+      this.attachCover(u, cmd.coverId);
+    }
+    UI.refreshCommandDeck(this);
+    return true;
+  }
+
+  failOrder(u, cmd, reason) {
+    if (!cmd) return false;
+    cmd.state = 'failed';
+    cmd.reason = reason || 'failed';
+    cmd.completedAt = this.time;
+    u.lastCommand = cmd;
+    this.ordersFailed++;
+    this.addFeed(`${u.callsign || u.name}: ${cmd.type.toUpperCase()} FAILED — ${reason}`, 'warn');
+    AudioSys.ui('deny');
+    if (cmd.type === 'focus') u.focusId = null;
+    if (cmd.type === 'heal') u.healTarget = null;
+    if (cmd.type === 'overwatch') u.overwatch = null;
+    if (cmd.type === 'suppress') u.suppressAt = null;
+    u.order = null;
+    u.waitT = 0; u.waitUntilCalm = false;
+    u.path = null; u.pathI = 0; u.sprint = false;
     if (u.queue.length) {
       const next = u.queue.shift();
       this.startOrder(u, next);
-    } else {
-      u.path = null;
     }
-    if (finished && (finished.type === 'move' || finished.type === 'cover' || finished.type === 'regroup' || finished.type === 'retreat')) {
-      if (finished.type === 'cover') {
-        this.attachCover(u, finished.coverId);
+    UI.refreshCommandDeck(this);
+    return true;
+  }
+
+  cancelOrder(u, index) {
+    if (index != null && index >= 0) {
+      const cmd = u.queue[index];
+      if (!cmd) return false;
+      cmd.state = 'cancelled';
+      cmd.reason = 'cancelled by player';
+      u.queue.splice(index, 1);
+      this.addFeed(`${u.callsign || u.name}: queued ${cmd.type.toUpperCase()} cancelled`);
+      AudioSys.ui('tap');
+      UI.refreshCommandDeck(this);
+      return true;
+    }
+    if (u.order) {
+      const cmd = u.order;
+      cmd.state = 'cancelled';
+      cmd.reason = 'cancelled by player';
+      cmd.completedAt = this.time;
+      u.lastCommand = cmd;
+      if (cmd.coverId) {
+        const cov = this.level.covers.find((c) => c.id === cmd.coverId);
+        if (cov) releaseCover(cov, u.id);
       }
+      if (cmd.type === 'carry') this.dropCarried(u);
+      u.order = null;
+      u.path = null; u.pathI = 0; u.sprint = false;
+      u.holding = false; u.following = false;
+      u.overwatch = null; u.suppressAt = null; u.focusId = null; u.healTarget = null;
+      u.waitT = 0;
+      u.interrupt = null;
+      this.addFeed(`${u.callsign || u.name}: ${cmd.type.toUpperCase()} cancelled`);
+      AudioSys.ui('tap');
     }
+    if (u.queue.length) {
+      for (const q of u.queue) { q.state = 'cancelled'; q.reason = 'cleared'; }
+      u.queue = [];
+    }
+    UI.refreshCommandDeck(this);
+    return true;
   }
 
   attachCover(u, coverId) {
     const cov = this.level.covers.find((c) => c.id === coverId && !c.dead);
-    if (cov && Math.abs(cov.x - u.x) < cov.w / 2 + 26) {
-      u.coverId = cov.id;
-      u.stance = 'crouch';
-      if (!cov.occupants.includes(u.id)) cov.occupants.push(u.id);
+    if (!cov) return false;
+    if (Math.abs(cov.x - u.x) > cov.w / 2 + 34 || Math.abs(cov.y - u.y) > 30) return false;
+    if (coverExpiry(cov).filter((id) => id !== u.id).length >= 2) return false;
+    if (u.coverId && u.coverId !== cov.id) {
+      const old = this.level.covers.find((c) => c.id === u.coverId);
+      if (old) releaseCover(old, u.id);
     }
+    claimCover(cov, u.id, 30);
+    u.coverId = cov.id;
+    u.assignedCover = cov.id;
+    u.stance = 'crouch';
+    if (!cov.occupants.includes(u.id)) cov.occupants.push(u.id);
+    return true;
   }
 
   cancelOrders(u) {
-    u.order = null; u.queue = []; u.path = null; u.pathI = 0;
-    u.holding = false; u.following = false;
-    u.overwatch = null; u.suppressAt = null; u.focusId = null; u.healTarget = null;
+    return this.cancelOrder(u, null);
   }
 
   cancelSelected() {
@@ -4516,26 +5420,70 @@ class Battle {
     UI.refreshCommandDeck(this);
   }
 
+  dropCarried(u) {
+    if (!u || !u.carryId) return;
+    const target = this.allies.find((a) => a.id === u.carryId);
+    if (target) {
+      target.carriedBy = null;
+      target.carried = false;
+      const fl = this.level.floorAt(u.x + (u.dir > 0 ? 24 : -24), u.y);
+      target.x = clamp(u.x + (u.dir > 0 ? 24 : -24), 20, this.level.width - 20);
+      target.y = fl.y;
+      target.stance = 'prone';
+      target.anim = 'down';
+      if (!target.downT || target.downT <= 0) target.downT = 30;
+    }
+    u.carryId = null;
+    u.carryTargetId = null;
+    if (u.order && u.order.type === 'carry') this.completeOrder(u, 'casualty dropped');
+  }
+
+  startCarry(u, target) {
+    if (!u || !target || !target.downed || target.carriedBy) return false;
+    u.carryId = target.id;
+    target.carriedBy = u.id;
+    target.carried = true;
+    target.path = null;
+    u.stance = 'stand';
+    this.addFeed(`${u.callsign || u.name}: carrying ${target.callsign || target.name}`, 'good');
+    AudioSys.ui('confirm');
+    return true;
+  }
+
   moveAlongPath(u, dt, speedMul = 1) {
     if (!u.path || u.pathI >= u.path.length) { u.moving = false; return true; }
     const tgt = u.path[u.pathI];
     const dx = tgt.x - u.x;
     const dy = tgt.y - u.y;
-    if (Math.abs(dx) < 2.2 && Math.abs(dy) < 12) {
+    if (Math.abs(dx) < 2.4 && Math.abs(dy) < 5) {
       u.pathI++;
-      if (u.pathI >= u.path.length) { u.path = null; u.moving = false; return true; }
+      if (u.pathI >= u.path.length) {
+        u.path = null; u.moving = false;
+        const fl = this.level.floorAt(u.x, u.y);
+        u.y = fl.y;
+        return true;
+      }
       return false;
     }
-    const spd = u.speed * speedMul * (u.stance === 'crouch' ? 0.55 : 1) * (u.downed ? 0 : 1);
+    let mul = speedMul;
+    if (u.stance === 'crouch') mul *= 0.62;
+    if (u.carryId) mul *= 0.55;
+    if (u.injury === 'light') mul *= 0.92;
+    if (u.injury === 'serious') mul *= 0.8;
+    if (u.stamina != null && u.stamina < 20) mul *= 0.82;
+    const spd = u.speed * mul;
     const step = spd * dt;
-    const len = Math.max(0.001, Math.abs(dx));
-    const moveX = Math.sign(dx) * Math.min(len, step);
-    u.x = clamp(u.x + moveX, 12, this.level.width - 12);
-    u.y = this.level.surfaceAt(u.x);
-    if (Math.abs(dx) > 1) u.dir = Math.sign(dx);
+    const d = Math.hypot(dx, dy);
+    const k = Math.min(1, step / Math.max(0.001, d));
+    const nx = clamp(u.x + dx * k, 12, this.level.width - 12);
+    const ny = u.y + dy * k;
+    u.x = nx; u.y = ny;
+    if (Math.abs(dx) > 0.8) u.dir = Math.sign(dx);
     u.moving = true;
-    u.walkPhase += Math.min(0.45, Math.abs(moveX) / Math.max(10, spd) * 7);
-    u.anim = speedMul > 1.3 ? 'run' : 'walk';
+    u.vaulting = !!tgt.vault;
+    u.onStair = !!(tgt.surface && String(tgt.surface).indexOf('_s') > 0);
+    u.walkPhase += Math.min(0.5, Math.abs(dx) / Math.max(10, spd) * 7);
+    u.anim = (speedMul > 1.3 || u.sprint) ? 'run' : 'walk';
     if (u.stamina != null) u.stamina = clamp(u.stamina - (speedMul > 1.3 ? 9 : 2.5) * dt, 0, 100);
     return false;
   }
@@ -4545,34 +5493,38 @@ class Battle {
     const o = u.order;
     switch (o.type) {
       case 'move': {
-        if (this.moveAlongPath(u, dt, 1)) this.completeOrder(u);
+        if (this.moveAlongPath(u, dt, 1)) this.completeOrder(u, 'arrived');
         break;
       }
       case 'sprint':
       case 'retreat': {
-        if (this.moveAlongPath(u, dt, 1.55)) this.completeOrder(u);
+        if (this.moveAlongPath(u, dt, 1.55)) this.completeOrder(u, 'arrived');
         break;
       }
       case 'regroup': {
-        if (this.moveAlongPath(u, dt, 1.1)) this.completeOrder(u);
+        if (this.moveAlongPath(u, dt, 1.1)) this.completeOrder(u, 'arrived');
         break;
       }
       case 'cover': {
         if (this.moveAlongPath(u, dt, 1.05)) {
-          this.attachCover(u, o.coverId);
-          this.completeOrder(u);
+          if (this.attachCover(u, o.coverId)) this.completeOrder(u, 'in cover');
+          else {
+            const cov = this.level.covers.find((c) => c.id === o.coverId);
+            if (!cov || cov.dead) this.failOrder(u, o, 'cover destroyed');
+            else this.completeOrder(u, 'cover position reached');
+          }
         }
         break;
       }
       case 'heal': {
         const t = u.healTarget;
-        if (!t || t.dead) { u.healTarget = null; this.completeOrder(u); break; }
-        if (Math.abs(t.x - u.x) > 34) {
+        if (!t || t.dead) { this.failOrder(u, o, 'patient lost'); break; }
+        if (Math.abs(t.x - u.x) > 34 || Math.abs(t.y - u.y) > 22) {
           if (!u.path) {
-            const p = findPath(this.level, u.x, t.x + (u.x < t.x ? -24 : 24));
+            const p = findPath(this.level, u.x, u.y, t.x + (u.x < t.x ? -24 : 24), t.y);
             if (p) { u.path = p; u.pathI = 0; }
           }
-          this.moveAlongPath(u, dt, 1.1);
+          if (u.path) this.moveAlongPath(u, dt, 1.1);
         } else {
           u.moving = false;
           u.anim = 'heal';
@@ -4581,8 +5533,50 @@ class Battle {
         }
         break;
       }
+      case 'carry': {
+        const target = this.allies.find((a) => a.id === u.carryTargetId && !a.dead);
+        if (!target || !target.downed) { this.failOrder(u, o, 'casualty lost'); break; }
+        if (u.carryId === target.id) { u.moving = false; break; }
+        if (Math.abs(target.x - u.x) > 34 || Math.abs(target.y - u.y) > 24) {
+          if (!u.path) {
+            const p = findPath(this.level, u.x, u.y, target.x + (u.x < target.x ? -22 : 22), target.y);
+            if (p) { u.path = p; u.pathI = 0; }
+          }
+          if (u.path) this.moveAlongPath(u, dt, 1.0);
+        } else {
+          u.moving = false;
+          if (this.startCarry(u, target)) this.completeOrder(u, 'casualty recovered');
+        }
+        break;
+      }
+      case 'wait': {
+        u.moving = false;
+        u.waitT -= dt;
+        if (u.waitUntilCalm && u.suppression < 25) this.completeOrder(u, 'calm');
+        else if (u.waitT <= 0) this.completeOrder(u, 'waited');
+        break;
+      }
+      case 'reload': {
+        u.moving = false;
+        if (u.reloadT <= 0) this.completeOrder(u, 'reloaded');
+        break;
+      }
       default:
         u.moving = false;
+    }
+  }
+
+  resumeCommand(u) {
+    const cmd = u.order;
+    if (!cmd || cmd.state !== 'waiting') return;
+    cmd.state = 'active';
+    const t = cmd.type;
+    if (['move', 'sprint', 'retreat', 'regroup', 'cover'].includes(t)) {
+      const p = findPath(this.level, u.x, u.y, cmd.x, cmd.y);
+      if (p) { u.path = p; u.pathI = 0; } else this.failOrder(u, cmd, 'route lost');
+    } else if (t === 'heal' && u.healTarget) {
+      const p = findPath(this.level, u.x, u.y, u.healTarget.x, u.healTarget.y);
+      if (p) { u.path = p; u.pathI = 0; }
     }
   }
 
@@ -4610,6 +5604,7 @@ class Battle {
   }
 
   updateRipples(dt) {
+    if (this.formationPreview && this.formationPreview.t > 0) this.formationPreview.t -= dt;
     for (let i = this.ripples.length - 1; i >= 0; i--) {
       this.ripples[i].t += dt;
       if (this.ripples[i].t > 1.4) this.ripples.splice(i, 1);
@@ -4639,8 +5634,17 @@ class Battle {
       if (this.timeLeft <= 0) { this.timeLeft = 0; this.failMission('TIME EXPIRED'); return; }
     }
     this.updateWaves(dt);
+    this.navT += dt;
+    this.level._crowdUnits = this.allies.filter((a) => !a.dead && !a.downed);
+    if (this.navT >= 0.25) { updateNavExposure(this.level, this.enemies, this.navT); this.navT = 0; }
     for (const u of this.units) {
       if (u.dead) continue;
+      if (u.carried) {
+        const carrier = this.units.find((c) => c.id === u.carriedBy && !c.dead && !c.downed);
+        if (carrier) { u.x = carrier.x; u.y = carrier.y; u.dir = carrier.dir; u.anim = 'carried'; u.moving = false; }
+        else { u.carried = false; u.carriedBy = null; u.anim = 'down'; u.state = 'down'; if (!u.downT || u.downT <= 0) u.downT = 20; }
+        continue;
+      }
       u.stateT += dt;
       if (u.suppression > 0) u.suppression = Math.max(0, u.suppression - dt * 9);
       if (u.hitFlash > 0) u.hitFlash -= dt;
@@ -4655,11 +5659,14 @@ class Battle {
       }
       if (u.stamina < 100 && u.anim !== 'run') u.stamina = clamp(u.stamina + dt * 7, 0, 100);
       if (u.downed) {
+        if (u.carriedBy) { u.anim = 'carried'; continue; }
         u.downT -= dt;
         if (u.downT <= 0) this.killUnit(u, null);
         if (u.anim !== 'down') u.anim = 'down';
         continue;
       }
+      this.updateInjury(u, dt);
+      this.updateMorale(u, dt);
       if (u.team === 'ally') this.updateAllyUnit(u, dt);
       else if (u.team === 'enemy') this.updateEnemyAI(u, dt);
       else this.updateNeutralUnit(u, dt);
@@ -4686,6 +5693,82 @@ class Battle {
     if (this.hintT > 0) this.hintT -= dt;
   }
 
+  updateInjury(u, dt) {
+    if (u.dead || u.downed) return;
+    const ratio = u.hp / u.maxHp;
+    const was = u.injury;
+    u.injury = ratio < 0.3 ? 'serious' : ratio < 0.65 ? 'light' : 'healthy';
+    if (u.injury === 'serious') {
+      if (!u.bleeding && !u.bleedingTreated) {
+        u.bleeding = true;
+        if (u.team === 'ally') this.addFeed(`${u.callsign || u.name}: bleeding — treat now`, 'warn');
+      }
+      if (u.bleeding) {
+        u.hp -= 0.5 * dt;
+        u.stress = clamp((u.stress || 0) + 1.4 * dt, 0, 100);
+        if (u.hp <= 0) { u.hp = 0; this.downUnit(u, u.lastHitBy); return; }
+      }
+    } else if (u.injury === 'healthy') {
+      u.bleeding = false;
+    }
+    if (was && was !== u.injury && u.team === 'ally' && u.injury !== 'healthy') {
+      this.addFeed(`${u.callsign || u.name}: ${u.injury.toUpperCase()} WOUND`, 'warn');
+    }
+  }
+
+  updateMorale(u, dt) {
+    if (u.dead || u.downed) return;
+    if (u.stress == null) u.stress = 0;
+    let decay = 2.0;
+    if (u.coverId) decay += 2;
+    if (this.allies.some((a) => a !== u && a.role === 'medic' && !a.dead && !a.downed && Math.abs(a.x - u.x) < 90)) decay += 2;
+    if (u.holding || u.overwatch) decay += 0.6;
+    u.stress = clamp(u.stress - decay * dt, 0, 100);
+    if (u.suppression > 55) u.stress = clamp(u.stress + 7 * dt, 0, 100);
+    if (u.bleeding) u.stress = clamp(u.stress + 2.5 * dt, 0, 100);
+    const cmd = this.aliveAllies.find((a) => a.role === 'commander');
+    const lead = cmd && cmd.skills ? (cmd.skills.leadership || 0) : 0;
+    u.morale = clamp(100 - u.stress * 0.82 + lead * 4, 0, 100);
+    u.shaken = u.stress > 55;
+    u.breaking = u.stress > 82;
+    if (u.team === 'ally' && u.breaking && u.morale < 26 && !u.panicked && this.time > (u.panicCd || 0)) {
+      u.panicked = true;
+      u.panicCd = this.time + 16;
+      const cov = findNearbyCover(this.level, u.x, this.enemies.find((e) => !e.dead)?.x, 320, null, u.y);
+      let panicOrder;
+      if (cov) panicOrder = { type: 'cover', x: cov.x, y: cov.y, coverId: cov.cover.id, auto: true };
+      else panicOrder = { type: 'retreat', x: this.deployCenter, y: this.level.floorAt(this.deployCenter).y, auto: true };
+      this.addFeed(`${u.callsign || u.name}: BREAKING — falling back`, 'warn');
+      this.pushOrder(u, panicOrder);
+    }
+  }
+
+  addStress(u, amount) {
+    if (!u || u.dead || u.downed) return;
+    u.stress = clamp((u.stress || 0) + amount, 0, 100);
+    u.morale = clamp(100 - u.stress * 0.82, 0, 100);
+  }
+
+  onUnitDamaged(u, amount, attacker) {
+    if (!u || u.dead) return;
+    if (u.team === 'ally') {
+      this.addStress(u, Math.min(18, 3 + amount * 0.45));
+      const cmd = u.order;
+      const emergency = (u.suppression > 62 || (u.hp < u.maxHp * 0.3 && amount > 8)) &&
+        cmd && ['move', 'sprint', 'regroup', 'cover', 'reload'].includes(cmd.type);
+      if (emergency && !u.interrupt) {
+        u.interrupt = { t: 2.0, cmdState: cmd.state, emerging: true };
+        cmd.state = 'waiting';
+        cmd.reason = 'contact — seeking cover';
+        u.path = null; u.pathI = 0;
+        this.addFeed(`${u.callsign || u.name}: taking cover — order paused`, 'warn');
+      }
+      if (cmd && cmd.type === 'reload' && amount > 9 && !u.carryId) {
+        this.failOrder(u, cmd, 'interrupted by fire');
+      }
+    }
+  }
+
   updateNeutralUnit(u, dt) {
     if (u.dead || u.downed) return;
     // neutrals are driven by updateNeutrals(); stance/anim handled there
@@ -4693,16 +5776,30 @@ class Battle {
 
   separateUnits() {
     const list = this.units.filter((u) => !u.dead && !u.downed);
+    const shift = (u, dx) => {
+      const oldX = u.x;
+      const oldY = u.y;
+      u.x = clamp(u.x + dx, 12, this.level.width - 12);
+      const f = this.level.floorAt(u.x, oldY);
+      if (Math.abs(f.y - oldY) > 38) { u.x = oldX; u.y = oldY; }
+      else u.y = f.y;
+    };
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i], b = list[j];
+        if (a.carriedBy || b.carriedBy) continue;
         const d = a.x - b.x;
-        if (Math.abs(d) < 12 && Math.abs(a.y - b.y) < 16) {
-          const push = (12 - Math.abs(d)) * 0.4 * (d >= 0 ? 1 : -1) || 3;
-          a.x = clamp(a.x + push, 12, this.level.width - 12);
-          b.x = clamp(b.x - push, 12, this.level.width - 12);
-          a.y = this.level.surfaceAt(a.x);
-          b.y = this.level.surfaceAt(b.x);
+        if (Math.abs(d) < 12 && Math.abs(a.y - b.y) < 20) {
+          // soldiers in motion squeeze past stationary allies; only idle
+          // pairs and head-on movers get pushed apart. This prevents a
+          // moving unit from bulldozing the whole squad down the lane.
+          if (a.moving && !b.moving) continue;
+          if (b.moving && !a.moving) continue;
+          if (a.moving && b.moving && Math.sign(a.dir || 1) === Math.sign(b.dir || 1)) continue;
+          const overlap = 12 - Math.abs(d);
+          const sign = d >= 0 ? 1 : -1;
+          shift(a, overlap * 0.5 * sign);
+          shift(b, -overlap * 0.5 * sign);
         }
       }
     }
@@ -4827,6 +5924,7 @@ class Battle {
     if (u) {
       if (u.team === 'ally') {
         if (this.orderMode === 'heal') { this.issueOrder('heal', u.x, u.y, u); return; }
+        if (this.orderMode === 'carry') { this.issueOrder('carry', u.x, u.y, u); return; }
         this.select(u.id, additive);
         this.inspected = u;
         this.cam.tx = clamp((this.cam.tx + u.x) / 2, this.cam.bounds.minX, this.cam.bounds.maxX);
@@ -4851,6 +5949,7 @@ class Battle {
     const mode = this.orderMode;
     if (mode === 'focus') { this.addFeed('Select a hostile to focus fire', 'warn'); AudioSys.ui('deny'); return; }
     if (mode === 'heal') { this.addFeed('Select a soldier to treat', 'warn'); AudioSys.ui('deny'); return; }
+    if (mode === 'carry') { this.addFeed('Select a downed soldier to carry', 'warn'); AudioSys.ui('deny'); return; }
     this.issueOrder(mode, wx, wy, null);
   }
 
@@ -4940,6 +6039,7 @@ Battle.prototype.finishReload = function (u) {
   u.anim = 'idle';
   u.state = 'idle';
   u.reloadFlash = 0.4;
+  if (u.order && u.order.type === 'reload') this.completeOrder(u, 'reloaded');
 };
 
 Battle.prototype.addSuppression = function (u, amount) {
@@ -4982,6 +6082,7 @@ Battle.prototype.friendlyBlocked = function (u, tx, ty) {
 
 Battle.prototype.fireWeapon = function (u, tx, ty, opts = {}) {
   if (!u || u.dead || u.downed) return false;
+  if (u.carryId) return false;
   const cfg = u.weaponCfg;
   if (!cfg) return false;
   if (u.reloadT > 0) return false;
@@ -5005,6 +6106,7 @@ Battle.prototype.fireWeapon = function (u, tx, ty, opts = {}) {
   u.state = 'fire';
   u.aimReady = 0;
   AudioSys.gunshot(cfg.sound, u.x, this.cam);
+  if (u.team === 'ally') this.emitNoise(u.x, u.y - 40, cfg.sound === 'sniper' ? 900 : cfg.sound === 'shotgun' ? 720 : 580, 'ally');
   this.particles.spawn({ x: m.x, y: m.y, vx: Math.cos(base) * 40, vy: Math.sin(base) * 40 - 8, life: 0.35, size: 3.5, kind: 'smoke', color: 'rgba(210,205,185,.32)', grow: 16, drag: 0.9 });
   // shell casing
   if (cfg.sound !== 'shotgun' && cfg.sound !== 'sniper') {
@@ -5041,6 +6143,8 @@ Battle.prototype.spawnBullet = function (u, origin, angle, cfg, opts) {
     vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
     team: u.team, ownerId: u.id,
     dmg: cfg.dmg * (u.team === 'enemy' ? (this.diff.playerDamage || 1) : 1),
+    pen: bulletPenetration(cfg),
+    passedCovers: [],
     suppress: cfg.suppression || 1,
     life: cfg.range / speed + 0.08, maxLife: cfg.range / speed + 0.08,
     trail: [], traveled: 0, fromX: origin.x, fromY: origin.y
@@ -5094,6 +6198,7 @@ Battle.prototype.updateProjectiles = function (dt) {
     // covers
     for (const cov of this.level.covers) {
       if (cov.dead) continue;
+      if (p.passedCovers && p.passedCovers.includes(cov.id)) continue;
       const t = rayRectT(ox, oy, nx, ny, coverRect(cov));
       if (t != null && t < bestT && t > 0.001) { bestT = t; hitType = 'cover'; hitUnit = null; hitCover = cov; }
     }
@@ -5102,6 +6207,17 @@ Battle.prototype.updateProjectiles = function (dt) {
     if (tt != null && tt < bestT) { bestT = tt; hitType = 'ground'; hitUnit = null; hitCover = null; }
     if (hitType) {
       const hx = ox + (nx - ox) * bestT, hy = oy + (ny - oy) * bestT;
+      if (hitType === 'cover' && hitCover && (p.pen || 0) > hitCover.hardness) {
+        // round penetrates: chip the cover, lose energy, keep flying
+        this.damageCover(hitCover, p.dmg * 0.35, hx, hy, p);
+        p.passedCovers = p.passedCovers || [];
+        p.passedCovers.push(hitCover.id);
+        p.dmg *= Math.max(0.25, 1 - hitCover.protection * 0.7);
+        p.suppress *= 0.75;
+        this.particles.spawn({ x: hx, y: hy, vx: p.vx * 0.2, vy: p.vy * 0.2, life: 0.18, size: 1.6, kind: 'spark', color: '#ffe0a8', additive: true });
+        p.x = nx; p.y = ny;
+        continue;
+      }
       this.handleImpact(p, hitType, hitUnit, hitCover, hx, hy);
       projs.splice(i, 1);
       continue;
@@ -5123,29 +6239,7 @@ Battle.prototype.handleImpact = function (p, type, unit, cover, x, y) {
     this.particles.burst(x, y, 4, { angle: -Math.PI / 2, spread: 1.8, speed: 70, life: 0.4, size: 2.2, colors: ['#7d1d16', '#a32b22', '#5a130f'], kind: 'blood', g: 240 });
     this.particles.spawn({ x, y, vx: 0, vy: -6, life: 0.3, size: 3, kind: 'smoke', color: 'rgba(120,20,15,.35)', grow: 10 });
   } else if (type === 'cover') {
-    cover.hp -= p.dmg * 0.8;
-    const mat = cover.type === 'container' ? 'metal' : cover.type === 'crate' || cover.type === 'log' ? 'wood' : 'stone';
-    AudioSys.impact(x, this.cam, mat);
-    this.particles.burst(x, y, 3, {
-      angle: p.team === 'ally' ? 0.4 : Math.PI - 0.4, spread: 1.6, speed: 55,
-      life: 0.45, size: 1.8, colors: mat === 'metal' ? ['#e9c98a', '#bfa06a', '#8b6b3a'] : mat === 'wood' ? ['#8b6b45', '#6a4d2f'] : ['#b5ad97', '#8f8774'],
-      kind: 'spark', g: 380, drag: 0.94
-    });
-    this.particles.spawn({ x, y, vx: 0, vy: -10, life: 0.5, size: 4, kind: 'dust', color: 'rgba(150,140,120,.4)', grow: 14 });
-    if (cover.hp <= 0 && !cover.dead) {
-      cover.dead = true;
-      for (const o of this.units) {
-        if (o.coverId === cover.id) {
-          o.coverId = null;
-          if (o.stance === 'crouch' && !o.order) o.stance = 'stand';
-        }
-      }
-      cover.occupants.length = 0;
-      cover.claims = [];
-      this.addFeed(cover.type === 'barrel' ? 'Fuel barrel detonated' : 'Cover destroyed', cover.explosive ? 'warn' : '');
-      this.particles.burst(cover.x, cover.y - cover.h / 2, 12, { spread: TAU, speed: 130, life: 0.9, size: 3.2, colors: ['#6b5a3e', '#8a7a58', '#3d3527'], kind: 'debris', g: 500 });
-      if (cover.explosive) this.explode(cover.x, cover.y - cover.h / 2, 115, 62, 'neutral', null);
-    }
+    this.damageCover(cover, p.dmg * 0.8, x, y, p);
   } else {
     AudioSys.impact(x, this.cam, 'dirt');
     this.particles.burst(x, y, 3, { angle: -Math.PI / 2, spread: 1.6, speed: 55, life: 0.4, size: 2.4, colors: ['#8a7c5e', '#6d6249', '#4b4534'], kind: 'dust', g: 260 });
@@ -5153,8 +6247,46 @@ Battle.prototype.handleImpact = function (p, type, unit, cover, x, y) {
   }
 };
 
+Battle.prototype.damageCover = function (cover, dmg, x, y, p) {
+  if (!cover || cover.dead) return;
+  cover.hp -= dmg;
+  const mat = cover.material || 'concrete';
+  AudioSys.impact(x, this.cam, mat === 'metal' ? 'metal' : mat === 'wood' ? 'wood' : 'stone');
+  this.particles.burst(x, y, 3, {
+    angle: p && p.team === 'ally' ? 0.4 : Math.PI - 0.4, spread: 1.6, speed: 55,
+    life: 0.45, size: 1.8,
+    colors: mat === 'metal' ? ['#e9c98a', '#bfa06a', '#8b6b3a'] : mat === 'wood' ? ['#8b6b45', '#6a4d2f'] : ['#b5ad97', '#8f8774'],
+    kind: 'spark', g: 380, drag: 0.94
+  });
+  this.particles.spawn({ x, y, vx: 0, vy: -10, life: 0.5, size: 4, kind: 'dust', color: 'rgba(150,140,120,.4)', grow: 14 });
+  if (cover.hp > 0) return;
+  cover.dead = true;
+  cover.hp = 0;
+  for (const o of this.units) {
+    if (o.coverId === cover.id) {
+      o.coverId = null;
+      o.assignedCover = null;
+      if (o.stance === 'crouch' && !o.order) o.stance = 'stand';
+    }
+  }
+  cover.occupants.length = 0;
+  cover.claims = [];
+  cover.claimT = {};
+  const splinter = mat === 'wood' ? 'debris' : 'spark';
+  this.particles.burst(cover.x, cover.y - cover.h / 2, 14, {
+    spread: TAU, speed: 140, life: 0.95, size: 3.2,
+    colors: mat === 'wood' ? ['#8b6b45', '#6a4d2f', '#4b3a24'] : mat === 'metal' ? ['#9fa4a0', '#6c716f', '#d0b170'] : ['#b5ad97', '#8f8774', '#6b6352'],
+    kind: splinter, g: 500
+  });
+  this.addFeed(cover.type === 'barrel' ? 'Fuel barrel detonated' : 'Cover destroyed' + (cover.solid ? ' — route opened' : ''), cover.explosive ? 'warn' : '');
+  this.level.navDirty = true;
+  rebuildNav(this.level);
+  if (cover.explosive) this.explode(cover.x, cover.y - cover.h / 2, 115, 62, 'neutral', null);
+};
+
 Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
   AudioSys.explosion(x, this.cam, clamp(radius / 100, 0.7, 1.5));
+  this.emitNoise(x, y, 900, team);
   CameraUtil.shake(this.cam, 9);
   this.particles.spawn({ x, y, life: 0.28, size: 12, grow: 120, kind: 'flash', color: 'rgba(255,210,140,.85)', additive: true });
   this.particles.spawn({ x, y, life: 0.45, size: 10, grow: 200, kind: 'ring', color: 'rgba(255,220,160,.5)', additive: true });
@@ -5170,7 +6302,9 @@ Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
     const mul = lineBlocked ? 0.55 : 1;
     this.damageUnit(u, dmg * fall * mul, ownerId, u.x, u.y - 24, { explosive: true });
     this.addSuppression(u, 40 * fall);
+    this.addStress(u, 26 * fall);
   }
+  let navChanged = false;
   for (const cov of this.level.covers) {
     if (cov.dead) continue;
     const d = dist(x, y, cov.x, cov.y - cov.h / 2);
@@ -5178,6 +6312,9 @@ Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
       cov.hp -= dmg * (1 - d / (radius * 0.9)) * 1.6;
       if (cov.hp <= 0) {
         cov.dead = true;
+        cov.claims = [];
+        cov.claimT = {};
+        navChanged = true;
         if (cov.explosive && dist(x, y, cov.x, cov.y) > 20) {
           this.pendingBooms = this.pendingBooms || [];
           this.pendingBooms.push({ x: cov.x, y: cov.y - cov.h / 2, t: 0.18, team, ownerId });
@@ -5185,6 +6322,7 @@ Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
       }
     }
   }
+  if (navChanged) { this.level.navDirty = true; rebuildNav(this.level); }
   if (this.pendingBooms) {
     // processed on the simulation step, not recursively here
   }
@@ -5212,6 +6350,8 @@ Battle.prototype.damageUnit = function (u, dmg, ownerId, hx, hy, opts = {}) {
   if (wasAlly) this.hurtFlash = Math.min(0.32, (this.hurtFlash || 0) + 0.14);
   u.suppression = clamp((u.suppression || 0) + final * 1.2, 0, 100);
   u.lastHitBy = ownerId;
+  this.onUnitDamaged(u, final, ownerId);
+  u.bleedingTreated = false;
   this.stats.damage += final;
   if (!opts.explosive) this.stats.hits++;
   const owner = this.units.find((o) => o.id === ownerId);
@@ -5241,7 +6381,14 @@ Battle.prototype.damageUnit = function (u, dmg, ownerId, hx, hy, opts = {}) {
 
 Battle.prototype.downUnit = function (u, ownerId) {
   if (u.downed || u.dead) return;
+  if (u.carryId) {
+    const carried = this.allies.find((a) => a.id === u.carryId);
+    if (carried) { carried.carriedBy = null; carried.carried = false; carried.x = u.x + 20; carried.y = u.y; if (!carried.downT || carried.downT <= 0) carried.downT = 20; }
+    u.carryId = null;
+    u.carryTargetId = null;
+  }
   u.downed = true;
+  u.bleeding = false;
   u.hp = 0;
   u.state = 'down';
   u.anim = 'down';
@@ -5261,6 +6408,7 @@ Battle.prototype.downUnit = function (u, ownerId) {
       u.isCommander = false;
       this.refreshCommand();
     }
+    for (const a of this.allies) if (a !== u && !a.dead && !a.downed && Math.abs(a.x - u.x) < 420) this.addStress(a, 14);
     UI.refreshSquadStrip(this);
   }
 };
@@ -5296,6 +6444,8 @@ Battle.prototype.killUnit = function (u, ownerId) {
     AudioSys.death(u.x, this.cam);
     CameraUtil.shake(this.cam, 5);
     if (u.role === 'commander') { u.isCommander = false; this.refreshCommand(); }
+    for (const a of this.allies) if (a !== u && !a.dead && !a.downed && Math.abs(a.x - u.x) < 500) this.addStress(a, 20);
+    if (u.carriedBy) { const c = this.allies.find((a) => a.id === u.carriedBy); if (c) { c.carryId = null; c.carryTargetId = null; } }
     UI.refreshSquadStrip(this);
   } else {
     this.stats.neutralsLost++;
@@ -5354,6 +6504,8 @@ Battle.prototype.healTick = function (healer, target, dt) {
       target.anim = 'idle';
       target.stance = 'crouch';
       target.injured = true;
+      target.bleeding = false;
+      target.bleedingTreated = true;
       this.stats.revives++;
       healer.healedTotal = (healer.healedTotal || 0) + target.hp;
       this.addFeed(`${target.callsign || target.name} STABILISED`, 'good');
@@ -5378,8 +6530,9 @@ Battle.prototype.healTick = function (healer, target, dt) {
       this.particles.spawn({ x: target.x + (Math.random() - 0.5) * 14, y: target.y - 30, vx: 0, vy: -12, life: 0.6, size: 2, kind: 'spark', color: 'rgba(150,220,160,.7)', additive: true });
     }
     if (target.hp >= target.maxHp) {
-      healer.medkits--; this.stats.heals++;
-      this.stats.medkitsUsed++;
+      this.stats.heals++;
+      target.bleeding = false;
+      target.bleedingTreated = true;
       this.addFeed(`${target.callsign || target.name}: patched up`, 'good');
       AudioSys.ui('confirm');
       target.healTarget = null;
@@ -5416,9 +6569,9 @@ Battle.prototype.updateObjectives = function (dt) {
       case 'hold': {
         const zone = o.zone;
         if (!zone) break;
-        const inside = this.allies.filter((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) <= (zone.w / 2) + 8).length;
+        const inside = this.allies.filter((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) <= (zone.w / 2) + 8 && Math.abs(a.y - zone.y) < 44).length;
         o.inside = inside;
-        o.contested = this.enemies.some((e) => !e.dead && Math.abs(e.x - zone.x) < zone.w / 2);
+        o.contested = this.enemies.some((e) => !e.dead && Math.abs(e.x - zone.x) < zone.w / 2 && Math.abs(e.y - zone.y) < 44);
         if (inside > 0) {
           o.progress = Math.min(o.max, o.progress + dt * (o.contested ? 0.55 : 1));
         }
@@ -5428,7 +6581,7 @@ Battle.prototype.updateObjectives = function (dt) {
       case 'interact': {
         const zone = o.zone;
         if (!zone) break;
-        const worker = this.allies.find((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) < 48);
+        const worker = this.allies.find((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) < 48 && Math.abs(a.y - zone.y) < 36);
         o.workerId = worker ? worker.id : null;
         if (worker) {
           o.progress = Math.min(o.max, o.progress + dt);
@@ -5452,7 +6605,7 @@ Battle.prototype.updateObjectives = function (dt) {
         const n = this.neutrals.find((x) => x.tag === tag);
         if (!n || n.dead) { if (n && n.dead) this.failObjective(o); break; }
         if (n.freed) { this.completeObjective(o); break; }
-        const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58);
+        const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58 && Math.abs(a.y - n.y) < 40);
         if (near) {
           o.progress = Math.min(o.max, o.progress + dt);
           if (Math.random() < dt * 5) this.particles.spawn({ x: n.x, y: n.y - 20, vx: 0, vy: -18, life: 0.6, size: 2, kind: 'spark', color: '#9fe0a8', additive: true });
@@ -5469,7 +6622,7 @@ Battle.prototype.updateObjectives = function (dt) {
           const n = this.neutrals.find((x) => x.tag === tag);
           if (!n || n.dead) { this.failObjective(o); allFreed = false; break; }
           if (n.freed) continue;
-          const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58);
+          const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58 && Math.abs(a.y - n.y) < 40);
           if (near) {
             o.perTag[tag] = Math.min(o.max, (o.perTag[tag] || 0) + dt);
             if (Math.random() < dt * 4) this.particles.spawn({ x: n.x, y: n.y - 20, vx: 0, vy: -16, life: 0.5, size: 2, kind: 'spark', color: '#9fe0a8', additive: true });
@@ -5502,10 +6655,11 @@ Battle.prototype.updateObjectives = function (dt) {
       }
       case 'extract': {
         if (!othersDone) break;
-        const inZone = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - evac.x) < 95);
+        const req = this.extractRequirement();
+        o.extractReq = req;
         const escorts = this.neutrals.filter((n) => n.freed || n.following);
-        const escortsIn = escorts.every((n) => Math.abs(n.x - evac.x) < 120);
-        if (inZone && escortsIn) this.completeObjective(o);
+        const escortsIn = escorts.every((n) => Math.abs(n.x - evac.x) < 120 && Math.abs(n.y - evac.y) < 40);
+        if (req.satisfied && req.have > 0 && escortsIn) this.completeObjective(o);
         break;
       }
     }
@@ -5521,6 +6675,58 @@ Battle.prototype.updateObjectives = function (dt) {
       if (this.stats.alliesKilled > 0) o.failed = true;
     }
   }
+};
+
+Battle.prototype.extractRequirement = function () {
+  const evac = this.level.evac;
+  const pol = this.extractPolicy || this.mission.extractPolicy || 'all';
+  const living = this.allies.filter((a) => !a.dead);
+  const total = Math.max(1, living.length);
+  const inZone = (a) => {
+    if (a.carriedBy) {
+      const carrier = this.allies.find((c) => c.id === a.carriedBy && !c.dead);
+      return !!carrier && Math.abs(carrier.x - evac.x) < 100 && Math.abs(carrier.y - evac.y) < 40;
+    }
+    return Math.abs(a.x - evac.x) < 100 && Math.abs(a.y - evac.y) < 40;
+  };
+  const present = living.filter(inZone).length;
+  const effective = living.filter((a) => !a.downed);
+  const downed = living.filter((a) => a.downed);
+  let need = total;
+  let satisfied = present >= need;
+  let label = 'ALL SURVIVORS AT EXTRACTION';
+  let detail = `${present}/${total} personnel`;
+  if (pol === 'commander') {
+    const cmd = living.find((a) => a.role === 'commander') || living.slice().sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];
+    need = 1;
+    satisfied = !!cmd && inZone(cmd);
+    label = 'COMMANDER AT EXTRACTION';
+    detail = satisfied ? 'commander on station' : 'commander not on station';
+  } else if (pol === 'vip') {
+    const vips = this.neutrals.filter((n) => (n.freed || n.following) && !n.dead);
+    need = 1;
+    satisfied = vips.length > 0 && vips.every((n) => Math.abs(n.x - evac.x) < 120 && Math.abs(n.y - evac.y) < 40);
+    label = 'VIP AT EXTRACTION';
+    detail = satisfied ? 'VIP on station' : 'VIP not on station';
+  } else if (pol === 'casualty') {
+    need = 1;
+    satisfied = downed.some(inZone) && effective.some(inZone);
+    label = 'CASUALTY + ESCORT AT EXTRACTION';
+    detail = `${downed.filter(inZone).length} casualty in zone`;
+  } else if (/^percent:/.test(pol)) {
+    const p = clamp(parseFloat(pol.split(':')[1]) || 0.6, 0.1, 1);
+    need = Math.ceil(total * p);
+    satisfied = present >= need && effective.length > 0 && effective.some(inZone);
+    label = `EXTRACT ${Math.round(p * 100)}% OF SURVIVORS`;
+    detail = `${present}/${need} required`;
+  } else {
+    // all: every living soldier, including downed (carried in) must be at the pad
+    need = total;
+    satisfied = present >= total && effective.length > 0 && effective.some(inZone);
+    label = 'ALL SURVIVORS AT EXTRACTION';
+    detail = `${present}/${need} personnel`;
+  }
+  return { policy: pol, need, have: present, satisfied, label, detail, inZone: effective.filter(inZone).length, downed: downed.length };
 };
 
 Battle.prototype.releaseNeutral = function (n) {
@@ -5623,7 +6829,7 @@ Battle.prototype.allyAcquireTarget = function (u) {
 
 Battle.prototype.autoCoverFor = function (u, threatX) {
   if (!u.prefersCover) return false;
-  const found = findNearbyCover(this.level, u.x + (u.formationIndex % 3 - 1) * 40, threatX, 230);
+  const found = findNearbyCover(this.level, u.x + (u.formationIndex % 3 - 1) * 40, threatX, 230, null, u.y);
   if (!found) return false;
   claimCover(found.cover, u.id);
   if (Math.abs(found.x - u.x) < 6) {
@@ -5642,9 +6848,61 @@ Battle.prototype.autoCoverFor = function (u, threatX) {
   return false;
 };
 
+Battle.prototype.allyTryFire = function (u, dt, target) {
+  if (!u || u.dead || u.downed || !u.weaponCfg) return false;
+  if (u.reloadT > 0 || u.carryId) return false;
+  if (u.mag <= 0) { if (u.reserve > 0) this.startReload(u); return false; }
+  const tgt = target || u.target || this.allyAcquireTarget(u);
+  if (!tgt || tgt.dead) return false;
+  if (Math.abs(tgt.x - u.x) > u.weaponCfg.range * 1.04) return false;
+  const eye = unitEye(u), c = unitCenter(tgt);
+  if (!lineOfSight(this.level, eye.x, eye.y, c.x, c.y)) return false;
+  const m = muzzlePoint(u);
+  const desired = Math.atan2(c.y - m.y, c.x - m.x);
+  u.desiredAim = desired;
+  u.dir = Math.cos(desired) >= 0 ? 1 : -1;
+  u.anim = 'aim';
+  u.state = 'aim';
+  u.aimT = (u.aimT || 0) + dt * (u.react || 1) * (1 - (u.suppression || 0) * 0.0035);
+  if (u.aimT < u.weaponCfg.aim) return false;
+  if (u.burstPause > 0) { u.burstPause -= dt; return false; }
+  if (u.burstLeft == null || u.burstLeft <= 0) {
+    u.burstLeft = u.weaponCfg.burst ? u.weaponCfg.burst[0] : 2;
+    u.burstPause = 0.15 + Math.random() * 0.3;
+    return false;
+  }
+  const fired = this.fireWeapon(u, c.x, c.y, { spreadMul: 1.25 });
+  if (fired) { u.burstLeft--; u.aimT = 0; }
+  return fired;
+};
+
 Battle.prototype.updateAllyUnit = function (u, dt) {
   if (u.dead || u.downed) return;
   if (u.healAudioT > 0) u.healAudioT -= dt;
+
+  /* ---- interruption: emergency cover, then resume the paused command ---- */
+  if (u.interrupt) {
+    u.interrupt.t -= dt;
+    u.moving = false;
+    const threat = this.enemies.find((e) => !e.dead);
+    if (!u.interrupt.target && threat) {
+      const found = findNearbyCover(this.level, u.x, threat.x, 280, threat.y, u.y);
+      u.interrupt.target = found;
+      if (found) { claimCover(found.cover, u.id); const p = findPath(this.level, u.x, u.y, found.x, found.y); if (p) { u.path = p; u.pathI = 0; } }
+    }
+    if (u.path) this.moveAlongPath(u, dt, 1.35);
+    if (u.interrupt.target && Math.abs(u.x - u.interrupt.target.x) < 14) this.attachCover(u, u.interrupt.target.cover.id);
+    if (u.interrupt.t <= 0) {
+      const cmd = u.order;
+      u.interrupt = null;
+      u.path = null;
+      if (cmd && cmd.state === 'waiting') this.resumeCommand(u);
+    }
+    const tgtI = this.allyAcquireTarget(u);
+    u.target = tgtI;
+    if (tgtI) this.allyTryFire(u, dt);
+    return;
+  }
 
   /* ---- movement execution ---- */
   const beforeX = u.x;
@@ -5710,6 +6968,39 @@ Battle.prototype.updateAllyUnit = function (u, dt) {
     if (Math.abs(u.healTarget.x - u.x) < 36) return; // stay on task
   }
 
+  /* ---- persistent command termination + follow behaviour ---- */
+  if (u.order) {
+    const o = u.order;
+    if (o.type === 'focus') {
+      const alive = this.enemies.some((e) => e.id === o.targetId && !e.dead);
+      if (!alive) { this.completeOrder(u, 'target eliminated'); return; }
+    }
+    if (o.type === 'suppress' && u.mag <= 0 && u.reserve <= 0) { this.failOrder(u, o, 'ammunition exhausted'); return; }
+    if (o.type === 'overwatch' && u.mag <= 0 && u.reserve <= 0) { this.failOrder(u, o, 'ammunition exhausted'); return; }
+    if ((o.type === 'hold' || o.type === 'overwatch') && u.breakT == null) u.breakT = 0;
+    if (o.type === 'follow') {
+      const leader = this.aliveAllies.find((a) => a.role === 'commander') || this.aliveAllies[0];
+      if (!leader || leader === u) { this.completeOrder(u, 'leader lost'); return; }
+      const want = leader.x - Math.sign(leader.dir || 1) * 46;
+      if (Math.abs(want - u.x) > 54 || Math.abs(leader.y - u.y) > 24) {
+        if (!u.path || this.time - (u.lastPathT || 0) > 0.9) {
+          const p = findPath(this.level, u.x, u.y, want, leader.y);
+          if (p) { u.path = p; u.pathI = 0; u.lastPathT = this.time; }
+        }
+        this.moveAlongPath(u, dt, 1.15);
+      } else {
+        u.moving = false;
+      }
+    }
+  }
+  if (u.carryId) {
+    const ev = this.level.evac;
+    if (ev && Math.abs(u.x - ev.x) < 92 && Math.abs(u.y - ev.y) < 30) {
+      this.addFeed(`${u.callsign || u.name}: casualty at extraction — dropping`, 'good');
+      this.dropCarried(u);
+    }
+  }
+
   /* ---- reload logic ---- */
   if (u.reloadT <= 0 && u.weaponCfg) {
     if (u.mag <= 0 && u.reserve > 0) this.startReload(u);
@@ -5730,6 +7021,35 @@ Battle.prototype.updateAllyUnit = function (u, dt) {
     }
   }
   if (u.healingAuto && !u.order) u.healingAuto = false;
+
+  /* ---- casualty recovery: nearby idle soldiers pick up the wounded ---- */
+  if (!u.order && !u.moving && !u.carryId && u.hp > u.maxHp * 0.45 && this.time > 4 && !u.recoveringAuto) {
+    const enemiesNear = this.enemies.some((e) => !e.dead && Math.abs(e.x - u.x) < 260);
+    if (!enemiesNear) {
+      const casualty = this.allies.find((a) => a !== u && !a.dead && a.downed && !a.carriedBy &&
+        Math.abs(a.x - u.x) < 360 && !this.allies.some((o) => o !== u && o.carryTargetId === a.id));
+      if (casualty) {
+        u.recoveringAuto = true;
+        this.startOrder(u, { type: 'carry', targetId: casualty.id, auto: true });
+        this.addFeed(`${u.callsign || u.name}: moving to recover ${casualty.callsign || casualty.name}`);
+      }
+    }
+  }
+  if (u.recoveringAuto && !u.order && !u.carryId) u.recoveringAuto = false;
+
+  /* ---- a carrier automatically brings the casualty to extraction ---- */
+  if (u.carryId && !u.order) {
+    const ev = this.level.evac;
+    if (ev && Math.abs(u.x - ev.x) > 60) {
+      if (!u.path) {
+        const p = findPath(this.level, u.x, u.y, ev.x + (u.x < ev.x ? -34 : 34), ev.y);
+        if (p) { u.path = p; u.pathI = 0; u.lastPathT = this.time; }
+      }
+      this.moveAlongPath(u, dt, 0.85);
+    } else {
+      u.moving = false;
+    }
+  }
 
   /* ---- firing ---- */
   if (u.reloadT > 0 || u.healTarget) {
@@ -5827,7 +7147,8 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
   /* state selection */
   const hpRatio = u.hp / u.maxHp;
   if (!u.dead) {
-    if (hpRatio < 0.24 && u.aiState !== 'retreat' && u.aiState !== 'engage') {
+    if ((u.confidence == null) || this.time % 0.5 < 0.05) u.confidence = this.enemyConfidence(u);
+    if ((hpRatio < 0.28 || (u.confidence != null && u.confidence < 0.22)) && u.aiState !== 'retreat' && u.aiState !== 'engage' && u.stateT > 0.6) {
       u.aiState = 'retreat';
       u.stateT = 0;
     }
@@ -5874,6 +7195,7 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
     }
     if (u.aiState === 'alert' && u.stateT > 9 && !u.target) { u.aiState = 'investigate'; u.stateT = 0; }
     if (u.aiState === 'investigate' && u.stateT > 11) { u.aiState = 'patrol'; u.stateT = 0; u.alertPos = null; }
+    if (u.aiState === 'search' && u.stateT > 14) { u.aiState = 'patrol'; u.stateT = 0; u.alertPos = null; u.searchPts = null; }
   }
 
   /* movement + combat */
@@ -5890,6 +7212,33 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
       } else {
         if (this.moveAlongPath(u, dt, 0.62)) { u.path = null; u.patrolWait = 2 + Math.random() * 3; }
       }
+      break;
+    }
+    case 'search': {
+      u.stance = 'stand';
+      if (!u.searchPts || !u.searchPts.length) {
+        const c = u.lastSeen || { x: u.x, y: u.y };
+        u.searchPts = [
+          { x: clamp(c.x + (Math.random() - 0.5) * 150, 30, this.level.width - 30) },
+          { x: clamp(c.x + (Math.random() - 0.5) * 280, 30, this.level.width - 30) },
+          { x: clamp(c.x + (Math.random() - 0.5) * 120, 30, this.level.width - 30) }
+        ];
+        u.searchI = 0;
+        u.path = null;
+      }
+      const pt = u.searchPts[u.searchI % u.searchPts.length];
+      if (!u.path) {
+        const p = findPath(this.level, u.x, u.y, pt.x, this.level.floorAt(pt.x).y);
+        if (p) { u.path = p; u.pathI = 0; }
+        else u.searchI++;
+      } else if (this.moveAlongPath(u, dt, 0.78)) {
+        u.path = null;
+        u.searchI++;
+        u.patrolWait = 1.2 + Math.random() * 1.6;
+      }
+      if (u.patrolWait > 0) { u.patrolWait -= dt; u.moving = false; }
+      u.desiredAim = Math.sin(this.time * 1.7) * 0.7 + (u.dir > 0 ? 0 : Math.PI);
+      if (u.stateT > 10) { u.aiState = 'patrol'; u.stateT = 0; u.searchPts = null; }
       break;
     }
     case 'alert':
@@ -5944,6 +7293,19 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
         break;
       }
       const d = Math.abs(tgt.x - u.x);
+      if (u.tactic === 'flank' && u.path && u.stateT > 0.5) {
+        this.moveAlongPath(u, dt, 1.1);
+        this.enemyTryFire(u, dt, true);
+        break;
+      }
+      if (u.suppression > 68) {
+        // pinned: stay low, return inaccurate fire, do not advance
+        u.moving = false;
+        u.path = null;
+        u.stance = 'crouch';
+        this.enemyTryFire(u, dt, false);
+        break;
+      }
       const preferred = u.weaponCfg ? Math.min(u.weaponCfg.range * 0.8, (u.enemyType === 'sniper' ? 900 : u.enemyType === 'scout' || u.enemyType === 'flanker' ? 220 : 520)) : 400;
       const tooClose = d < preferred * 0.35 && (u.enemyType === 'sniper' || u.enemyType === 'heavy');
       if (d > preferred * 1.15 && u.enemyType !== 'sniper') {
@@ -5979,58 +7341,134 @@ Battle.prototype.updateEnemyAI = function (u, dt) {
   }
 };
 
+/* ---------- noise events: gunfire, explosions, sprinting ---------- */
+Battle.prototype.emitNoise = function (x, y, radius, team) {
+  this.noise = this.noise || [];
+  this.noise.push({ x, y, t: this.time, r: radius || 520, team: team || 'ally' });
+  if (this.noise.length > 24) this.noise.shift();
+};
+Battle.prototype.pruneNoise = function () {
+  if (!this.noise) return;
+  const cut = this.time - 4;
+  this.noise = this.noise.filter((n) => n.t >= cut);
+};
+
+function angleDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  return Math.abs(d);
+}
+
+Battle.prototype.enemyConfidence = function (u) {
+  const mates = this.enemies.filter((e) => e !== u && !e.dead);
+  let nearby = 0;
+  for (const e of mates) if (Math.abs(e.x - u.x) < 520) nearby++;
+  const leader = this.enemies.some((e) => !e.dead && e.enemyType === 'commander');
+  const hp = u.hp / u.maxHp;
+  let c = 0.35 + Math.min(0.3, nearby * 0.08) + (leader ? 0.15 : 0) + hp * 0.25;
+  if (u.suppression > 50) c -= 0.18;
+  return clamp(c, 0, 1);
+};
+
 Battle.prototype.enemyPerceive = function (u) {
   if (u.dead) return;
+  this.pruneNoise();
   const eye = unitEye(u);
   const range = u.viewRange || 620;
-  let best = null, bestD = 1e9;
+  const facing = u.aimAngle != null ? u.aimAngle : (u.dir > 0 ? 0 : Math.PI);
+  let best = null, bestScore = -1e9;
+  let sawAny = false;
   for (const a of this.allies) {
     if (a.dead || a.downed) continue;
-    const d = Math.abs(a.x - u.x);
-    if (d > range) continue;
     const c = unitCenter(a);
-    if (!lineOfSight(this.level, eye.x, eye.y, c.x, c.y, {})) continue;
-    // stealth / prone reduces detection a little
-    let eff = d * (a.stance === 'prone' ? 1.15 : a.stance === 'crouch' ? 1.08 : 1);
-    if (a.suppression > 60) eff *= 0.9;
-    // avoid every hostile stacking onto one soldier
-    const crowd = this.enemies.reduce((n, e) => n + (e !== u && !e.dead && e.target === a ? 1 : 0), 0);
-    eff += crowd * 150;
-    if (eff < bestD) { bestD = eff; best = a; }
+    const d = Math.hypot(c.x - eye.x, c.y - eye.y);
+    if (d > range) continue;
+    const los = lineOfSight(this.level, eye.x, eye.y, c.x, c.y, {});
+    if (!los) continue;
+    const ang = Math.atan2(c.y - eye.y, c.x - eye.x);
+    const inFov = angleDiff(ang, facing) < 1.02 || d < 90;
+    // peripheral vision detects slowly; foveal vision detects fast
+    const base = inFov ? 0.75 : 0.18;
+    const stealth = a.stance === 'prone' ? 0.45 : a.stance === 'crouch' ? 0.72 : 1;
+    const score = base * (1 - d / range) * stealth;
+    sawAny = true;
+    u.awareness = clamp((u.awareness || 0) + (inFov ? 0.5 : 0.14) * stealth, 0, 1);
+    if (score > bestScore) { bestScore = score; best = a; }
   }
-  if (best) {
-    u.target = best;
+  if (!sawAny) u.awareness = clamp((u.awareness || 0) - 0.13, 0, 1);
+
+  // hearing: gunfire and explosions draw attention even through cover
+  let heard = null;
+  for (const n of this.noise || []) {
+    if (n.team === 'enemy') continue;
+    const d = Math.hypot(n.x - u.x, (n.y - u.y) * 1.6);
+    if (d < n.r) { heard = n; break; }
+  }
+  if (heard && (!best || u.awareness < 0.6)) {
+    u.awareness = clamp((u.awareness || 0) + 0.4, 0, 1);
+    u.alertPos = { x: heard.x, y: heard.y };
+    u.heardT = this.time;
+    if (u.aiState === 'patrol') { u.aiState = 'alert'; u.stateT = 0; }
+  }
+
+  // acquire when awareness crosses threshold (close targets are noticed instantly)
+  const canAcquire = best && (u.awareness > 0.55 || Math.abs(best.x - u.x) < 130);
+  if (canAcquire) {
     if (u.target !== best) u.targetSince = this.time;
+    u.target = best;
     u.lastSeen = { x: best.x, y: best.y };
     u.lastSeenT = this.time;
     u.alertPos = { x: best.x, y: best.y };
-    if (u.aiState === 'patrol' || u.aiState === 'investigate' || u.aiState === 'alert') {
-      const wasPassive = u.aiState === 'patrol' || u.aiState === 'investigate';
+    if (u.aiState === 'patrol' || u.aiState === 'investigate' || u.aiState === 'alert' || u.aiState === 'search') {
+      const wasPassive = u.aiState === 'patrol' || u.aiState === 'investigate' || u.aiState === 'search';
       u.aiState = 'alert';
-      u.stateT = u.aiState === 'alert' ? u.stateT : 0;
-      u.reactT = Math.max(u.reactT || 0, (0.18 + Math.random() * 0.3) * (u.react || 1) * (this.diff ? 1 : 1));
+      if (!wasPassive) u.stateT = 0;
+      u.reactT = Math.max(u.reactT || 0, (0.18 + Math.random() * 0.3) * (u.react || 1));
       if (wasPassive && !u.contacted) {
         u.contacted = true;
-        this.addFeed('CONTACT — ' + (u.enemyName || 'hostile') + (best && Math.abs(best.x - u.x) < 220 ? ' — CLOSE' : ''), 'warn');
+        this.addFeed('CONTACT — ' + (u.enemyName || 'hostile') + (Math.abs(best.x - u.x) < 220 ? ' — CLOSE' : ''), 'warn');
       }
     }
   } else if (u.target) {
-    if (this.time - (u.lastSeenT || 0) > 2.2) {
+    const stale = this.time - (u.lastSeenT || 0);
+    if (stale > 2.2 || !best) {
       u.target = null;
-      u.aiState = 'investigate';
-      u.stateT = 0;
+      if (u.lastSeen) { u.aiState = 'search'; u.searchPts = null; u.stateT = 0; }
+      else { u.aiState = 'patrol'; u.stateT = 0; }
       u.path = null;
     }
   }
-  // periodic target rotation so hostiles spread fire across the squad
-  if (u.target && !u.target.dead && this.time - (u.targetSince || 0) > 2.6) {
-    u.target = null; // re-acquire with crowd penalty next tick
-  }
   if (u.target && u.target.dead) { u.target = null; u.aiState = 'patrol'; u.stateT = 0; }
+  // confidence drives aggression and retreat
+  u.confidence = this.enemyConfidence(u);
 };
 
 Battle.prototype.enemyCoord = function (u) {
   if (u.dead || this.time % 4 > 0.25) return;
+  // commander aura: nearby hostiles steady and coordinate
+  const boss = this.enemies.find((e) => !e.dead && e.enemyType === 'commander');
+  if (boss) {
+    for (const e of this.enemies) {
+      if (e === boss || e.dead) continue;
+      if (Math.abs(e.x - boss.x) < 560) {
+        e.commanderBuff = true;
+        e.react = Math.max(0.6, e.react * 0.998);
+        if (this.time % 4 < 0.2 && e.aiState === 'patrol' && u.alertPos) {
+          e.alertPos = { ...u.alertPos };
+          e.aiState = 'alert';
+          e.stateT = 0;
+        }
+      } else e.commanderBuff = false;
+    }
+  }
+  // assign tactical roles: heavies pin, fast units flank, rest hold the line
+  for (const e of this.enemies) {
+    if (e.dead || e.aiState !== 'engage') continue;
+    if (e.enemyType === 'heavy' || (e.weaponCfg && /LIGHT MACHINE/.test(e.weaponCfg.cls || ''))) e.tactic = 'suppress';
+    else if (e.enemyType === 'flanker' || e.enemyType === 'scout') e.tactic = 'flank';
+    else e.tactic = 'line';
+  }
   const workers = this.enemies.filter((e) => !e.dead && e.aiState !== 'patrol' && e.lastSeen);
   if (!workers.length) return;
   const lead = workers[0];
@@ -6152,6 +7590,7 @@ function drawMenuBackdrop(ctx, level, cam, t, opts = {}) {
   const view = Stage.viewFor(cam);
   Art.drawTerrain(ctx, level, view);
   Art.drawPlatformFaces(ctx, level, view);
+  Art.drawPlatforms(ctx, level, view);
   // props
   for (const p of level.props) drawWorldProp(ctx, p);
   for (const c of level.covers) Art.drawCover(ctx, c, level);
@@ -6353,6 +7792,7 @@ Battle.prototype.render = function () {
   const view = Stage.viewFor(cam);
   Art.drawTerrain(ctx, level, view);
   Art.drawPlatformFaces(ctx, level, view);
+  Art.drawPlatforms(ctx, level, view);
   // decals under units
   this.drawDecals(ctx, view);
   // props behind
@@ -6391,6 +7831,33 @@ Battle.prototype.render = function () {
     if (u.dead) continue;
     if (u.x < view.left - 70 || u.x > view.right + 70) continue;
     drawUnitTag(ctx, u, this.selected.has(u.id));
+  }
+  // formation preview
+  if (this.formationPreview && this.formationPreview.t > 0) {
+    const fp = this.formationPreview;
+    const a = clamp(fp.t / 2.2, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = 'rgba(227,166,63,.35)';
+    ctx.setLineDash([3, 5]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < fp.slots.length; i++) {
+      const sl = fp.slots[i];
+      if (i === 0) ctx.moveTo(sl.x, sl.y - 2); else ctx.lineTo(sl.x, sl.y - 2);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const sl of fp.slots) {
+      ctx.fillStyle = 'rgba(227,166,63,.10)';
+      ctx.strokeStyle = 'rgba(227,166,63,.75)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(sl.x, sl.y, 9, 3.4, 0, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(sl.x - 3, sl.y - 7); ctx.lineTo(sl.x + 3, sl.y - 7); ctx.lineTo(sl.x, sl.y - 3); ctx.closePath();
+      ctx.fillStyle = 'rgba(227,166,63,.8)'; ctx.fill();
+    }
+    ctx.restore();
   }
   // selected unit order path
   for (const u of this.selectedUnits) this.drawUnitPath(ctx, u);
@@ -6796,7 +8263,79 @@ const MenuScene = {
 const Campaign = {
   data: null,
   settings: { ...SETTINGS_DEFAULT },
+  recoveredFromBackup: false,
+  lastSaveError: null,
   _namesUsed: new Set(),
+
+  checksum(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; }
+    return h.toString(36);
+  },
+
+  validateCampaign(c) {
+    if (!c || typeof c !== 'object') return 'campaign missing';
+    if (!Array.isArray(c.roster) || !c.roster.length || c.roster.length > 40) return 'roster invalid';
+    if (typeof c.difficulty !== 'string' || !DIFFICULTIES[c.difficulty]) return 'difficulty invalid';
+    for (const k of ['credits', 'ammo', 'med', 'intel']) {
+      if (typeof c[k] !== 'number' || !isFinite(c[k])) return k + ' invalid';
+    }
+    if (!c.progress || typeof c.progress !== 'object') return 'progress invalid';
+    for (const s of c.roster) {
+      if (!s || typeof s.id !== 'string' || typeof s.role !== 'string' || !ROLES[s.role]) return 'soldier invalid';
+      if (typeof s.name !== 'string') return 'soldier name invalid';
+      if (typeof s.xp !== 'number' || !isFinite(s.xp) || s.xp < 0) return 'xp invalid';
+      if (!s.skills || typeof s.skills !== 'object') return 'skills invalid';
+      if (!['ready', 'injured', 'dead'].includes(s.status)) return 'status invalid';
+      if (typeof s.hp !== 'number' || !isFinite(s.hp)) return 'hp invalid';
+      if (typeof s.weapon !== 'string' || !WEAPONS[s.weapon]) return 'weapon invalid';
+    }
+    return null;
+  },
+
+  clampCampaign(c) {
+    c.credits = Math.max(0, Math.round(c.credits || 0));
+    c.ammo = Math.max(0, Math.round(c.ammo || 0));
+    c.med = Math.max(0, Math.round(c.med || 0));
+    c.intel = Math.max(0, Math.round(c.intel || 0));
+    if (!Array.isArray(c.recruits)) c.recruits = [];
+    for (const s of c.roster) {
+      s.xp = Math.max(0, Math.round(s.xp || 0));
+      s.hp = Math.max(0, Math.min(999, Math.round(s.hp || 0)));
+      if (!Array.isArray(s.history)) s.history = [];
+      s.armor = clamp(Math.round(s.armor || 1), 1, 3);
+    }
+    for (const id in c.progress) {
+      const p = c.progress[id];
+      p.stars = clamp(Math.round(p.stars || 0), 0, 3);
+      p.attempts = Math.max(0, Math.round(p.attempts || 0));
+      p.status = ['locked', 'available', 'complete'].includes(p.status) ? p.status : 'locked';
+      p.completed = !!p.completed;
+    }
+    return c;
+  },
+
+  wrapPayload(campaign, settings) {
+    const body = JSON.stringify({ campaign, settings });
+    return { version: SAVE_VERSION, savedAt: Date.now(), checksum: this.checksum(body), body: JSON.parse(body) };
+  },
+
+  unwrapPayload(raw) {
+    if (!raw || typeof raw !== 'object') return 'payload missing';
+    if (raw.version !== SAVE_VERSION) return 'version mismatch';
+    if (typeof raw.checksum !== 'string' || !raw.body || typeof raw.body !== 'object') return 'corrupt payload';
+    const body = JSON.stringify({ campaign: raw.body.campaign, settings: raw.body.settings });
+    if (this.checksum(body) !== raw.checksum) return 'checksum mismatch';
+    const err = this.validateCampaign(raw.body.campaign);
+    if (err) return err;
+    return null;
+  },
+
+  normalizePayload(raw) {
+    const c = this.clampCampaign(deepClone(raw.body.campaign));
+    const s = Object.assign({ ...SETTINGS_DEFAULT }, raw.body.settings || {});
+    return { campaign: c, settings: s };
+  },
 
   blankSoldier(role, name, callsign, opts = {}) {
     const base = ROLES[role];
@@ -6876,42 +8415,78 @@ const Campaign = {
   },
 
   load() {
-    try {
-      const raw = storeGet(SAVE_KEY);
-      if (!raw) return false;
-      if (raw.version !== SAVE_VERSION) {
-        // attempt soft migration
-        if (!raw.campaign) { console.warn('save version mismatch'); return false; }
+    // 1) primary → 2) backup → 3) legacy v2 → 4) fail
+    const attempt = (key, migrator) => {
+      const raw = storeGet(key);
+      if (!raw) return null;
+      if (raw.version === SAVE_VERSION) {
+        const err = this.unwrapPayload(raw);
+        if (err) { console.warn('save rejected (' + key + '):', err); return null; }
+        return this.normalizePayload(raw);
       }
-      if (!raw.campaign || !Array.isArray(raw.campaign.roster) || !raw.campaign.roster.length) return false;
-      this.data = raw.campaign;
-      this.settings = Object.assign({ ...SETTINGS_DEFAULT }, raw.settings || {});
+      if (migrator) return migrator(raw);
+      return null;
+    };
+    const migrateV2 = (raw) => {
+      if (!raw || raw.version !== 2 || !raw.campaign) return null;
+      if (this.validateCampaign(raw.campaign)) return null;
+      const payload = this.wrapPayload(raw.campaign, raw.settings || {});
+      return this.normalizePayload(payload);
+    };
+    let result = attempt(SAVE_KEY) || attempt(SAVE_KEY, migrateV2) ||
+                 attempt(SAVE_BACKUP) || attempt(SAVE_BACKUP, migrateV2);
+    if (result) {
+      // Detect which key actually served the data
+      const primaryOk = (() => {
+        const raw = storeGet(SAVE_KEY);
+        if (!raw) return false;
+        if (raw.version === SAVE_VERSION) return !this.unwrapPayload(raw);
+        return !!migrateV2(raw);
+      })();
+      this.recoveredFromBackup = !primaryOk;
+      this.data = result.campaign;
+      this.settings = Object.assign({ ...SETTINGS_DEFAULT }, result.settings || {});
       this.ensureDefaults();
+      if (this.recoveredFromBackup) {
+        this.save(); // re-commit the recovered state to primary
+      }
       return true;
-    } catch (e) {
-      console.warn('save load failed', e);
-      return false;
     }
+    console.warn('no valid save found (primary or backup)');
+    return false;
   },
 
   save() {
     if (!this.data) return false;
     this.data.updatedAt = Date.now();
-    const payload = { version: SAVE_VERSION, campaign: this.data, settings: this.settings };
-    const ok = storeSet(SAVE_KEY, payload);
-    if (ok) {
-      // keep a backup snapshot at most every few saves
-      if (!this._lastBackup || Date.now() - this._lastBackup > 60000) {
-        this._lastBackup = Date.now();
-        storeSet(SAVE_BACKUP, payload);
+    const payload = this.wrapPayload(this.data, this.settings);
+    try {
+      // atomic-ish: pending → verify → rotate → commit
+      storeSet(SAVE_PENDING, payload);
+      const check = storeGet(SAVE_PENDING);
+      if (!check || this.unwrapPayload(check)) {
+        this.lastSaveError = 'pending validation failed';
+        return false;
       }
+      const current = storeGet(SAVE_KEY);
+      if (current && !this.unwrapPayload(current)) {
+        storeSet(SAVE_BACKUP, current); // keep last good as backup
+      }
+      storeSet(SAVE_KEY, payload);
+      storeRemove(SAVE_PENDING);
+      this.lastSaveError = null;
+      return true;
+    } catch (e) {
+      this.lastSaveError = e && e.message || 'write failed';
+      console.warn('save failed', e);
+      return false;
     }
-    return ok;
   },
 
   reset() {
-    storeRemove(SAVE_KEY); storeRemove(SAVE_BACKUP);
+    storeRemove(SAVE_KEY); storeRemove(SAVE_BACKUP); storeRemove(SAVE_PENDING);
     this.data = null;
+    this.recoveredFromBackup = false;
   },
 
   /* ---- queries ---- */
@@ -7184,21 +8759,42 @@ const Campaign = {
   },
 
   exportSave() {
-    return JSON.stringify({ version: SAVE_VERSION, campaign: this.data, settings: this.settings }, null, 1);
+    return JSON.stringify(this.wrapPayload(this.data, this.settings), null, 1);
   },
 
   importSave(text) {
     try {
       const raw = JSON.parse(text);
-      if (!raw || !raw.campaign || !Array.isArray(raw.campaign.roster)) return { ok: false, msg: 'Invalid save data' };
-      this.data = raw.campaign;
-      this.settings = Object.assign({ ...SETTINGS_DEFAULT }, raw.settings || {});
+      if (raw && raw.version === 2 && raw.campaign) {
+        if (this.validateCampaign(raw.campaign)) return { ok: false, msg: 'Invalid campaign structure' };
+        this.data = this.clampCampaign(deepClone(raw.campaign));
+        this.settings = Object.assign({ ...SETTINGS_DEFAULT }, raw.settings || {});
+        this.ensureDefaults();
+        this.save();
+        return { ok: true };
+      }
+      const err = this.unwrapPayload(raw);
+      if (err) return { ok: false, msg: 'Save rejected: ' + err };
+      const norm = this.normalizePayload(raw);
+      this.data = norm.campaign;
+      this.settings = norm.settings;
       this.ensureDefaults();
       this.save();
       return { ok: true };
     } catch (e) {
       return { ok: false, msg: 'Could not parse save data' };
     }
+  },
+
+  diagnoseSave() {
+    const out = {};
+    for (const [name, key] of [['primary', SAVE_KEY], ['backup', SAVE_BACKUP], ['pending', SAVE_PENDING]]) {
+      const raw = storeGet(key);
+      if (!raw) { out[name] = 'missing'; continue; }
+      const err = raw.version === SAVE_VERSION ? this.unwrapPayload(raw) : 'legacy/unknown version';
+      out[name] = err ? 'invalid: ' + err : 'valid';
+    }
+    return out;
   }
 };
 
@@ -8181,6 +9777,7 @@ const CMD_DEFS = {
     { id: 'queue', label: 'QUEUE', ico: 'queue', hint: 'Queue orders' },
     { id: 'reload', label: 'RELOAD', ico: 'reload', hint: 'Reload weapons' },
     { id: 'heal', label: 'TREAT', ico: 'heal', hint: 'Treat a soldier' },
+    { id: 'carry', label: 'CARRY', ico: 'move', hint: 'Carry a downed soldier' },
     { id: 'retreat', label: 'FALL BK', ico: 'retreat', hint: 'Retreat to deployment' },
     { id: 'regroup', label: 'REGROUP', ico: 'regroup', hint: 'Regroup on commander' },
     { id: 'formation', label: 'LINE', ico: 'grid', hint: 'Cycle formation' },
@@ -8237,6 +9834,22 @@ Object.assign(UI, {
       if (e.target.closest('[data-all]')) { this.battle.selectAll(); return; }
       if (e.target.closest('[data-form]')) { this.battle.cycleFormation(); return; }
       if (e.target.closest('[data-queue]')) { this.battle.toggleQueue(); return; }
+      const cancelQ = e.target.closest('[data-cancel-q]');
+      if (cancelQ) {
+        const unit = this.battle.selectedUnits[0];
+        if (unit) this.battle.cancelOrder(unit, parseInt(cancelQ.dataset.cancelQ, 10));
+        return;
+      }
+      if (e.target.closest('[data-cancel-active]')) {
+        const unit = this.battle.selectedUnits[0];
+        if (unit) this.battle.cancelOrder(unit, null);
+        return;
+      }
+      if (e.target.closest('[data-drop]')) {
+        const unit = this.battle.selectedUnits[0];
+        if (unit && unit.carryId) { this.battle.dropCarried(unit); UI.refreshSelection(this.battle); }
+        return;
+      }
     });
     $('#pause').addEventListener('click', (e) => {
       if (e.target === $('#pause')) { if (this.battle) this.battle.setPaused(false); }
@@ -8289,9 +9902,11 @@ Object.assign(UI, {
       case 'focus':
       case 'suppress':
       case 'heal':
+      case 'carry':
         if (!b.selectedUnits.length) { this.toast('Select a soldier first', 'bad'); AudioSys.ui('deny'); return; }
         b.setOrderMode(cmd);
         if (cmd === 'heal') this.toast('Tap a soldier to treat');
+        else if (cmd === 'carry') this.toast('Tap a downed soldier to carry');
         else if (cmd === 'focus') this.toast('Tap a hostile to focus fire');
         else if (cmd === 'cover') this.toast('Tap a position to take cover');
         else if (cmd === 'overwatch') this.toast('Tap the direction to watch');
@@ -8372,7 +9987,7 @@ Object.assign(UI, {
         let t = '';
         if (a.dead) t = '';
         else if (a.downed) t = 'DOWN';
-        else if (a.order) t = a.order.type.toUpperCase();
+        else if (a.order) t = a.order.type.toUpperCase() + (a.order.state === 'waiting' ? '|PAUSE' : '');
         else if (a.overwatch) t = 'WATCH';
         else if (a.suppressAt) t = 'SUPPR';
         else if (a.reloadT > 0) t = 'RELOAD';
@@ -8400,7 +10015,7 @@ Object.assign(UI, {
       if (insp && insp.team === 'enemy' && !insp.dead) {
         el.innerHTML = `<div class="ss-name" style="color:var(--danger-2)">${esc(insp.enemyName || 'HOSTILE')}</div>
           <div class="ss-role">${(insp.type || '').toUpperCase()}</div>
-          <div class="ss-need">HP ${Math.round(insp.hp)} / ${insp.maxHp} · ${insp.aiState.toUpperCase()} · ${insp.weaponCfg ? insp.weaponCfg.name : ''}</div>
+          <div class="ss-need">HP ${Math.round(insp.hp)} / ${insp.maxHp} · ${insp.aiState.toUpperCase()} · ${insp.weaponCfg ? insp.weaponCfg.name : ''} · AWARE ${Math.round((insp.awareness || 0) * 100)}%${insp.suppression > 40 ? ' · PINNED' : ''}</div>
           <div class="ss-bars"><button class="btn btn--sm" data-all="1">SELECT SQUAD</button></div>`;
         return;
       }
@@ -8417,7 +10032,8 @@ Object.assign(UI, {
           <button class="btn btn--sm" data-all="1">ALL</button>
           <button class="btn btn--sm" data-form="1">${battle.formation.toUpperCase()}</button>
           <button class="btn btn--sm ${battle.queueMode ? 'btn--primary' : ''}" data-queue="1">QUEUE ${battle.queueMode ? 'ON' : 'OFF'}</button>
-        </div>`;
+        </div>
+        ${units.some((x) => x.order || x.queue.length) ? `<div class="cmdq">${units.filter((x) => x.order).map((x) => `<span class="cmdq-chip is-active">${esc((x.callsign || '?').slice(0, 5))}:${x.order.type.toUpperCase()}${x.queue.length ? ' +' + x.queue.length : ''}</span>`).join('')}</div>` : ''}`;
       return;
     }
     const u = units[0];
@@ -8431,14 +10047,23 @@ Object.assign(UI, {
     else if (u.suppressAt) need = 'SUPPRESSING';
     else if (u.suppression > 45) need = 'SUPPRESSED — seek cover';
     else need = `${u.holding ? 'HOLDING' : u.moving ? 'MOVING' : 'READY'} · ${u.medkits} MEDKIT${u.medkits === 1 ? '' : 'S'} · ${u.weaponCfg ? u.weaponCfg.name : ''}`;
+    const chips = [];
+    if (u.order) {
+      chips.push(`<span class="cmdq-chip is-active" title="${esc(u.order.reason || '')}">${u.order.type.toUpperCase()}${u.order.state === 'waiting' ? ' · PAUSED' : ''}<button data-cancel-active="1" aria-label="Cancel order">×</button></span>`);
+    }
+    u.queue.forEach((q, qi) => {
+      chips.push(`<span class="cmdq-chip"><b>${qi + 1}</b>${q.type.toUpperCase()}<button data-cancel-q="${qi}" aria-label="Cancel queued order">×</button></span>`);
+    });
     el.innerHTML = `<div class="ss-name">${esc(u.callsign || u.name)}</div>
       <div class="ss-role">${ROLES[u.role].label}${u.isCommander ? ' · CMD' : ''}</div>
       <div class="ss-need">${esc(need)}</div>
+      ${chips.length ? `<div class="cmdq">${chips.join('')}</div>` : ''}
       <div class="ss-bars">
         <div class="ssbar hp ${hpPct < 30 ? 'low' : ''}"><div class="lab"><span>HP</span><span>${Math.round(Math.max(0, u.hp))}/${u.maxHp}</span></div><div class="tr"><i style="width:${hpPct}%"></i></div></div>
         <div class="ssbar am"><div class="lab"><span>AMMO</span><span>${u.mag}/${u.reserve}</span></div><div class="tr"><i style="width:${amPct}%"></i></div></div>
         <button class="btn btn--sm" data-all="1">ALL</button>
         <button class="btn btn--sm" data-form="1">${battle.formation.toUpperCase()}</button>
+        ${u.carryId ? '<button class="btn btn--sm" data-drop="1">DROP CASUALTY</button>' : ''}
       </div>`;
   },
 
@@ -8465,9 +10090,15 @@ Object.assign(UI, {
         let pct = null;
         if (['hold', 'interact', 'rescue', 'rescueUnits', 'survive'].includes(o.type) && o.max) pct = clamp(o.progress / o.max, 0, 1);
         const cls = o.complete ? 'done' : o.failed ? 'failed' : o.optional ? 'opt' : '';
+        let detail = '';
+        if (o.type === 'extract' && !o.complete) {
+          const req = battle.extractRequirement();
+          detail = `<span class="obj-detail">${esc(req.detail)}</span>`;
+        }
         return `<div class="obj ${cls}">
           <span class="b"></span>
           <span>${esc(o.label)}</span>
+          ${detail}
           ${pct != null && !o.complete && !o.failed ? `<span class="pbar"><i style="width:${Math.round(pct * 100)}%"></i></span>` : ''}
         </div>`;
       }).join('');
@@ -8670,6 +10301,9 @@ const App = { scene: 'menu', last: 0, acc: 0, started: false };
 
 function boot() {
   const loaded = Campaign.load();
+  if (loaded && Campaign.recoveredFromBackup) {
+    setTimeout(() => UI.toast('Save recovered from backup', 'bad'), 800);
+  }
   if (!loaded) {
     const ls = storeGet('squadcommander.settings');
     if (ls) Campaign.settings = Object.assign({ ...SETTINGS_DEFAULT }, ls);
@@ -8678,11 +10312,11 @@ function boot() {
   Stage.init($('#stage'));
   UI.init();
   try { MenuScene.init(); } catch (e) { console.warn('menu scene failed', e); }
-  window.addEventListener('beforeunload', () => { try { Campaign.save(); } catch (e) { } });
+  window.addEventListener('beforeunload', () => { if (!window.__SC_NO_AUTOSAVE) { try { Campaign.save(); } catch (e) { } } });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       if (UI.battle && !UI.battle.result && !UI.battle.paused) UI.battle.setPaused(true);
-      Campaign.save();
+      if (!window.__SC_NO_AUTOSAVE) Campaign.save();
     }
   });
   window.addEventListener('keydown', onKeyDown);

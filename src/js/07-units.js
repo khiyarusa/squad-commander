@@ -190,6 +190,10 @@ function effectiveSpread(u) {
   s *= 1 + (u.recoil || 0) * 0.12;
   if (u.moving) s *= 1.15;
   s *= 1 + (100 - u.stamina) / 300;
+  const moraleMul = 0.72 + (u.morale == null ? 100 : u.morale) / 360;
+  s /= Math.max(0.55, moraleMul);
+  if (u.injury === 'light') s *= 1.1;
+  if (u.injury === 'serious') s *= 1.3;
   return s;
 }
 

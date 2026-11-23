@@ -540,6 +540,95 @@ const Art = (() => {
   }
 
   /* ---------------- props & cover ---------------- */
+  /* ---------------- elevated walkways & stairs ---------------- */
+  function drawPlatforms(c, level, view) {
+    const pal = level.paletteData;
+    const rail = level.theme === 'industrial' ? '#5a615c' : level.theme === 'forest' ? '#5a4a32' : '#6a6152';
+    const beam = level.theme === 'industrial' ? '#3c423f' : level.theme === 'forest' ? '#3a2f20' : '#474034';
+    for (const p of level.platforms) {
+      if (p.x2 < view.left - 140 || p.x1 > view.right + 140) continue;
+      const y = p.y;
+      // support legs down to whatever ground is beneath
+      c.strokeStyle = 'rgba(18,18,14,.55)';
+      c.lineWidth = 5;
+      for (let sx = p.x1 + 24; sx < p.x2 - 8; sx += 118) {
+        const gy = level.surfaceAt(sx);
+        c.beginPath(); c.moveTo(sx, y + 6); c.lineTo(sx + 3, gy); c.stroke();
+        c.lineWidth = 3;
+        c.beginPath(); c.moveTo(sx - 8, y + 24); c.lineTo(sx + 14, y + 24); c.stroke();
+        c.lineWidth = 5;
+      }
+      // deck
+      const g = c.createLinearGradient(0, y, 0, y + 16);
+      g.addColorStop(0, level.theme === 'industrial' ? '#6b7470' : '#7c6a49');
+      g.addColorStop(1, beam);
+      c.fillStyle = g;
+      c.fillRect(p.x1, y - 4, p.x2 - p.x1, 14);
+      // planks / seams
+      c.strokeStyle = 'rgba(20,18,14,.4)';
+      c.lineWidth = 1;
+      for (let sx = p.x1 + 12; sx < p.x2; sx += 26) {
+        c.beginPath(); c.moveTo(sx, y - 3); c.lineTo(sx, y + 9); c.stroke();
+      }
+      // top edge highlight
+      c.fillStyle = 'rgba(255,235,190,.16)';
+      c.fillRect(p.x1, y - 4, p.x2 - p.x1, 1.2);
+      // railing (back side)
+      c.strokeStyle = rail;
+      c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(p.x1, y - 30); c.lineTo(p.x2, y - 30); c.stroke();
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(p.x1, y - 16); c.lineTo(p.x2, y - 16); c.stroke();
+      for (let sx = p.x1 + 6; sx <= p.x2 - 4; sx += 32) {
+        c.beginPath(); c.moveTo(sx, y - 4); c.lineTo(sx, y - 30); c.stroke();
+      }
+      // end posts
+      c.fillStyle = rail;
+      c.fillRect(p.x1 - 2, y - 32, 4, 30);
+      c.fillRect(p.x2 - 2, y - 32, 4, 30);
+      // hanging lamp for industrial
+      if (level.theme === 'industrial' && level.quality !== 'low') {
+        const lx = (p.x1 + p.x2) / 2;
+        c.strokeStyle = 'rgba(20,20,16,.6)'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(lx, y - 30); c.lineTo(lx, y - 56); c.stroke();
+        c.fillStyle = 'rgba(240,190,110,.85)';
+        c.beginPath(); c.arc(lx, y - 57, 3, 0, TAU); c.fill();
+        const lg = c.createRadialGradient(lx, y - 57, 2, lx, y - 57, 46);
+        lg.addColorStop(0, 'rgba(255,200,110,.16)');
+        lg.addColorStop(1, 'rgba(255,200,110,0)');
+        c.fillStyle = lg; c.beginPath(); c.arc(lx, y - 57, 46, 0, TAU); c.fill();
+      }
+    }
+    // stairs
+    for (const st of level.stairs) {
+      if (st.x2 < view.left - 100 || st.x1 > view.right + 100) continue;
+      const n = Math.max(6, Math.round(Math.abs(st.x2 - st.x1) / 12));
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n, t1 = (i + 1) / n;
+        const x0 = st.x1 + (st.x2 - st.x1) * t0;
+        const x1 = st.x1 + (st.x2 - st.x1) * t1;
+        const y0 = st.y1 + (st.y2 - st.y1) * t0;
+        const y1 = st.y1 + (st.y2 - st.y1) * t1;
+        const g = c.createLinearGradient(0, Math.min(y0, y1), 0, Math.max(y0, y1) + 10);
+        g.addColorStop(0, level.theme === 'industrial' ? '#606965' : '#7a6948');
+        g.addColorStop(1, beam);
+        c.fillStyle = g;
+        c.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0) + 1, Math.abs(y1 - y0) + 10);
+        c.fillStyle = 'rgba(255,240,200,.13)';
+        c.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0) + 1, 1);
+      }
+      // handrail along the slope
+      c.strokeStyle = rail; c.lineWidth = 1.3;
+      c.beginPath(); c.moveTo(st.x1, st.y1 - 30); c.lineTo(st.x2, st.y2 - 30); c.stroke();
+      for (let i = 0; i <= n; i += 2) {
+        const tt = i / n;
+        const sx = st.x1 + (st.x2 - st.x1) * tt;
+        const sy = st.y1 + (st.y2 - st.y1) * tt;
+        c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx, sy - 30); c.stroke();
+      }
+    }
+  }
+
   function drawCover(c, cov, level) {
     if (cov.dead) {
       // rubble remains
@@ -1196,7 +1285,7 @@ const Art = (() => {
 
   return {
     rr, poly, limb, lensFlare, paletteFor, getTile, drawSky, drawSun, drawStars,
-    surfaceAt, drawTerrain, drawPlatformFaces, drawCover, drawProp, drawZone,
+    surfaceAt, drawTerrain, drawPlatformFaces, drawPlatforms, drawCover, drawProp, drawZone,
     drawUnit, drawWeaponShape, muzzleOf, drawMuzzleFlash, drawTracer, drawPortrait,
     MUZZLE_LEN
   };

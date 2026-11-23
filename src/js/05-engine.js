@@ -66,7 +66,7 @@ const Stage = {
   onDown(e) {
     if (!this.handlers) return;
     AudioSys.unlock();
-    this.canvas.setPointerCapture && this.canvas.setPointerCapture(e.pointerId);
+    try { this.canvas.setPointerCapture && this.canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-released pointer */ }
     this.pointers.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false });
     if (this.pointers.size === 2) {
       const pts = [...this.pointers.values()];
@@ -87,6 +87,7 @@ const Stage = {
       const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       const ratio = d / Math.max(1, this.pinch.dist);
       this.cam.zoom = clamp(this.pinch.zoom * ratio, this.cam.minZoom || 0.72, this.cam.maxZoom || 1.45);
+      this.cam.tz = this.cam.zoom; // keep the zoom target in sync with the pinch
       // pan by midpoint
       const mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
       const s = this.scale * this.cam.zoom;
@@ -129,6 +130,7 @@ const Stage = {
     if (!this.cam) return;
     const delta = -e.deltaY * 0.0016;
     this.cam.zoom = clamp(this.cam.zoom + delta, this.cam.minZoom || 0.72, this.cam.maxZoom || 1.45);
+    this.cam.tz = this.cam.zoom; // wheel zoom sticks
     if (this.handlers.cameraMoved) this.handlers.cameraMoved();
     this.canvas.classList.add('zooming');
     clearTimeout(this._zt);
@@ -143,9 +145,12 @@ const Stage = {
 };
 
 function makeCamera(x, y) {
+  // short (phone) viewports start zoomed out a touch so ground-level units
+  // stay clear of the bottom HUD stack
+  const z = (Stage.h && Stage.h < 520) ? 0.78 : 1;
   return {
-    x, y, zoom: 1, minZoom: 0.74, maxZoom: 1.4,
-    tx: x, ty: y, tz: 1, shake: 0, shakeX: 0, shakeY: 0,
+    x, y, zoom: z, minZoom: 0.74, maxZoom: 1.4,
+    tx: x, ty: y, tz: z, shake: 0, shakeX: 0, shakeY: 0,
     bounds: { minX: 0, maxX: 4000, minY: 300, maxY: 430 },
     follow: null, smooth: 6
   };

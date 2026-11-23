@@ -36,6 +36,7 @@ Battle.prototype.finishReload = function (u) {
   u.anim = 'idle';
   u.state = 'idle';
   u.reloadFlash = 0.4;
+  if (u.order && u.order.type === 'reload') this.completeOrder(u, 'reloaded');
 };
 
 Battle.prototype.addSuppression = function (u, amount) {
@@ -78,6 +79,7 @@ Battle.prototype.friendlyBlocked = function (u, tx, ty) {
 
 Battle.prototype.fireWeapon = function (u, tx, ty, opts = {}) {
   if (!u || u.dead || u.downed) return false;
+  if (u.carryId) return false;
   const cfg = u.weaponCfg;
   if (!cfg) return false;
   if (u.reloadT > 0) return false;
@@ -101,6 +103,7 @@ Battle.prototype.fireWeapon = function (u, tx, ty, opts = {}) {
   u.state = 'fire';
   u.aimReady = 0;
   AudioSys.gunshot(cfg.sound, u.x, this.cam);
+  if (u.team === 'ally') this.emitNoise(u.x, u.y - 40, cfg.sound === 'sniper' ? 900 : cfg.sound === 'shotgun' ? 720 : 580, 'ally');
   this.particles.spawn({ x: m.x, y: m.y, vx: Math.cos(base) * 40, vy: Math.sin(base) * 40 - 8, life: 0.35, size: 3.5, kind: 'smoke', color: 'rgba(210,205,185,.32)', grow: 16, drag: 0.9 });
   // shell casing
   if (cfg.sound !== 'shotgun' && cfg.sound !== 'sniper') {
@@ -137,6 +140,8 @@ Battle.prototype.spawnBullet = function (u, origin, angle, cfg, opts) {
     vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
     team: u.team, ownerId: u.id,
     dmg: cfg.dmg * (u.team === 'enemy' ? (this.diff.playerDamage || 1) : 1),
+    pen: bulletPenetration(cfg),
+    passedCovers: [],
     suppress: cfg.suppression || 1,
     life: cfg.range / speed + 0.08, maxLife: cfg.range / speed + 0.08,
     trail: [], traveled: 0, fromX: origin.x, fromY: origin.y
@@ -190,6 +195,7 @@ Battle.prototype.updateProjectiles = function (dt) {
     // covers
     for (const cov of this.level.covers) {
       if (cov.dead) continue;
+      if (p.passedCovers && p.passedCovers.includes(cov.id)) continue;
       const t = rayRectT(ox, oy, nx, ny, coverRect(cov));
       if (t != null && t < bestT && t > 0.001) { bestT = t; hitType = 'cover'; hitUnit = null; hitCover = cov; }
     }
@@ -198,6 +204,17 @@ Battle.prototype.updateProjectiles = function (dt) {
     if (tt != null && tt < bestT) { bestT = tt; hitType = 'ground'; hitUnit = null; hitCover = null; }
     if (hitType) {
       const hx = ox + (nx - ox) * bestT, hy = oy + (ny - oy) * bestT;
+      if (hitType === 'cover' && hitCover && (p.pen || 0) > hitCover.hardness) {
+        // round penetrates: chip the cover, lose energy, keep flying
+        this.damageCover(hitCover, p.dmg * 0.35, hx, hy, p);
+        p.passedCovers = p.passedCovers || [];
+        p.passedCovers.push(hitCover.id);
+        p.dmg *= Math.max(0.25, 1 - hitCover.protection * 0.7);
+        p.suppress *= 0.75;
+        this.particles.spawn({ x: hx, y: hy, vx: p.vx * 0.2, vy: p.vy * 0.2, life: 0.18, size: 1.6, kind: 'spark', color: '#ffe0a8', additive: true });
+        p.x = nx; p.y = ny;
+        continue;
+      }
       this.handleImpact(p, hitType, hitUnit, hitCover, hx, hy);
       projs.splice(i, 1);
       continue;
@@ -219,29 +236,7 @@ Battle.prototype.handleImpact = function (p, type, unit, cover, x, y) {
     this.particles.burst(x, y, 4, { angle: -Math.PI / 2, spread: 1.8, speed: 70, life: 0.4, size: 2.2, colors: ['#7d1d16', '#a32b22', '#5a130f'], kind: 'blood', g: 240 });
     this.particles.spawn({ x, y, vx: 0, vy: -6, life: 0.3, size: 3, kind: 'smoke', color: 'rgba(120,20,15,.35)', grow: 10 });
   } else if (type === 'cover') {
-    cover.hp -= p.dmg * 0.8;
-    const mat = cover.type === 'container' ? 'metal' : cover.type === 'crate' || cover.type === 'log' ? 'wood' : 'stone';
-    AudioSys.impact(x, this.cam, mat);
-    this.particles.burst(x, y, 3, {
-      angle: p.team === 'ally' ? 0.4 : Math.PI - 0.4, spread: 1.6, speed: 55,
-      life: 0.45, size: 1.8, colors: mat === 'metal' ? ['#e9c98a', '#bfa06a', '#8b6b3a'] : mat === 'wood' ? ['#8b6b45', '#6a4d2f'] : ['#b5ad97', '#8f8774'],
-      kind: 'spark', g: 380, drag: 0.94
-    });
-    this.particles.spawn({ x, y, vx: 0, vy: -10, life: 0.5, size: 4, kind: 'dust', color: 'rgba(150,140,120,.4)', grow: 14 });
-    if (cover.hp <= 0 && !cover.dead) {
-      cover.dead = true;
-      for (const o of this.units) {
-        if (o.coverId === cover.id) {
-          o.coverId = null;
-          if (o.stance === 'crouch' && !o.order) o.stance = 'stand';
-        }
-      }
-      cover.occupants.length = 0;
-      cover.claims = [];
-      this.addFeed(cover.type === 'barrel' ? 'Fuel barrel detonated' : 'Cover destroyed', cover.explosive ? 'warn' : '');
-      this.particles.burst(cover.x, cover.y - cover.h / 2, 12, { spread: TAU, speed: 130, life: 0.9, size: 3.2, colors: ['#6b5a3e', '#8a7a58', '#3d3527'], kind: 'debris', g: 500 });
-      if (cover.explosive) this.explode(cover.x, cover.y - cover.h / 2, 115, 62, 'neutral', null);
-    }
+    this.damageCover(cover, p.dmg * 0.8, x, y, p);
   } else {
     AudioSys.impact(x, this.cam, 'dirt');
     this.particles.burst(x, y, 3, { angle: -Math.PI / 2, spread: 1.6, speed: 55, life: 0.4, size: 2.4, colors: ['#8a7c5e', '#6d6249', '#4b4534'], kind: 'dust', g: 260 });
@@ -249,8 +244,46 @@ Battle.prototype.handleImpact = function (p, type, unit, cover, x, y) {
   }
 };
 
+Battle.prototype.damageCover = function (cover, dmg, x, y, p) {
+  if (!cover || cover.dead) return;
+  cover.hp -= dmg;
+  const mat = cover.material || 'concrete';
+  AudioSys.impact(x, this.cam, mat === 'metal' ? 'metal' : mat === 'wood' ? 'wood' : 'stone');
+  this.particles.burst(x, y, 3, {
+    angle: p && p.team === 'ally' ? 0.4 : Math.PI - 0.4, spread: 1.6, speed: 55,
+    life: 0.45, size: 1.8,
+    colors: mat === 'metal' ? ['#e9c98a', '#bfa06a', '#8b6b3a'] : mat === 'wood' ? ['#8b6b45', '#6a4d2f'] : ['#b5ad97', '#8f8774'],
+    kind: 'spark', g: 380, drag: 0.94
+  });
+  this.particles.spawn({ x, y, vx: 0, vy: -10, life: 0.5, size: 4, kind: 'dust', color: 'rgba(150,140,120,.4)', grow: 14 });
+  if (cover.hp > 0) return;
+  cover.dead = true;
+  cover.hp = 0;
+  for (const o of this.units) {
+    if (o.coverId === cover.id) {
+      o.coverId = null;
+      o.assignedCover = null;
+      if (o.stance === 'crouch' && !o.order) o.stance = 'stand';
+    }
+  }
+  cover.occupants.length = 0;
+  cover.claims = [];
+  cover.claimT = {};
+  const splinter = mat === 'wood' ? 'debris' : 'spark';
+  this.particles.burst(cover.x, cover.y - cover.h / 2, 14, {
+    spread: TAU, speed: 140, life: 0.95, size: 3.2,
+    colors: mat === 'wood' ? ['#8b6b45', '#6a4d2f', '#4b3a24'] : mat === 'metal' ? ['#9fa4a0', '#6c716f', '#d0b170'] : ['#b5ad97', '#8f8774', '#6b6352'],
+    kind: splinter, g: 500
+  });
+  this.addFeed(cover.type === 'barrel' ? 'Fuel barrel detonated' : 'Cover destroyed' + (cover.solid ? ' — route opened' : ''), cover.explosive ? 'warn' : '');
+  this.level.navDirty = true;
+  rebuildNav(this.level);
+  if (cover.explosive) this.explode(cover.x, cover.y - cover.h / 2, 115, 62, 'neutral', null);
+};
+
 Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
   AudioSys.explosion(x, this.cam, clamp(radius / 100, 0.7, 1.5));
+  this.emitNoise(x, y, 900, team);
   CameraUtil.shake(this.cam, 9);
   this.particles.spawn({ x, y, life: 0.28, size: 12, grow: 120, kind: 'flash', color: 'rgba(255,210,140,.85)', additive: true });
   this.particles.spawn({ x, y, life: 0.45, size: 10, grow: 200, kind: 'ring', color: 'rgba(255,220,160,.5)', additive: true });
@@ -266,7 +299,9 @@ Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
     const mul = lineBlocked ? 0.55 : 1;
     this.damageUnit(u, dmg * fall * mul, ownerId, u.x, u.y - 24, { explosive: true });
     this.addSuppression(u, 40 * fall);
+    this.addStress(u, 26 * fall);
   }
+  let navChanged = false;
   for (const cov of this.level.covers) {
     if (cov.dead) continue;
     const d = dist(x, y, cov.x, cov.y - cov.h / 2);
@@ -274,6 +309,9 @@ Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
       cov.hp -= dmg * (1 - d / (radius * 0.9)) * 1.6;
       if (cov.hp <= 0) {
         cov.dead = true;
+        cov.claims = [];
+        cov.claimT = {};
+        navChanged = true;
         if (cov.explosive && dist(x, y, cov.x, cov.y) > 20) {
           this.pendingBooms = this.pendingBooms || [];
           this.pendingBooms.push({ x: cov.x, y: cov.y - cov.h / 2, t: 0.18, team, ownerId });
@@ -281,6 +319,7 @@ Battle.prototype.explode = function (x, y, radius, dmg, team, ownerId) {
       }
     }
   }
+  if (navChanged) { this.level.navDirty = true; rebuildNav(this.level); }
   if (this.pendingBooms) {
     // processed on the simulation step, not recursively here
   }
@@ -308,6 +347,8 @@ Battle.prototype.damageUnit = function (u, dmg, ownerId, hx, hy, opts = {}) {
   if (wasAlly) this.hurtFlash = Math.min(0.32, (this.hurtFlash || 0) + 0.14);
   u.suppression = clamp((u.suppression || 0) + final * 1.2, 0, 100);
   u.lastHitBy = ownerId;
+  this.onUnitDamaged(u, final, ownerId);
+  u.bleedingTreated = false;
   this.stats.damage += final;
   if (!opts.explosive) this.stats.hits++;
   const owner = this.units.find((o) => o.id === ownerId);
@@ -337,7 +378,14 @@ Battle.prototype.damageUnit = function (u, dmg, ownerId, hx, hy, opts = {}) {
 
 Battle.prototype.downUnit = function (u, ownerId) {
   if (u.downed || u.dead) return;
+  if (u.carryId) {
+    const carried = this.allies.find((a) => a.id === u.carryId);
+    if (carried) { carried.carriedBy = null; carried.carried = false; carried.x = u.x + 20; carried.y = u.y; if (!carried.downT || carried.downT <= 0) carried.downT = 20; }
+    u.carryId = null;
+    u.carryTargetId = null;
+  }
   u.downed = true;
+  u.bleeding = false;
   u.hp = 0;
   u.state = 'down';
   u.anim = 'down';
@@ -357,6 +405,7 @@ Battle.prototype.downUnit = function (u, ownerId) {
       u.isCommander = false;
       this.refreshCommand();
     }
+    for (const a of this.allies) if (a !== u && !a.dead && !a.downed && Math.abs(a.x - u.x) < 420) this.addStress(a, 14);
     UI.refreshSquadStrip(this);
   }
 };
@@ -392,6 +441,8 @@ Battle.prototype.killUnit = function (u, ownerId) {
     AudioSys.death(u.x, this.cam);
     CameraUtil.shake(this.cam, 5);
     if (u.role === 'commander') { u.isCommander = false; this.refreshCommand(); }
+    for (const a of this.allies) if (a !== u && !a.dead && !a.downed && Math.abs(a.x - u.x) < 500) this.addStress(a, 20);
+    if (u.carriedBy) { const c = this.allies.find((a) => a.id === u.carriedBy); if (c) { c.carryId = null; c.carryTargetId = null; } }
     UI.refreshSquadStrip(this);
   } else {
     this.stats.neutralsLost++;
@@ -450,6 +501,8 @@ Battle.prototype.healTick = function (healer, target, dt) {
       target.anim = 'idle';
       target.stance = 'crouch';
       target.injured = true;
+      target.bleeding = false;
+      target.bleedingTreated = true;
       this.stats.revives++;
       healer.healedTotal = (healer.healedTotal || 0) + target.hp;
       this.addFeed(`${target.callsign || target.name} STABILISED`, 'good');
@@ -474,8 +527,9 @@ Battle.prototype.healTick = function (healer, target, dt) {
       this.particles.spawn({ x: target.x + (Math.random() - 0.5) * 14, y: target.y - 30, vx: 0, vy: -12, life: 0.6, size: 2, kind: 'spark', color: 'rgba(150,220,160,.7)', additive: true });
     }
     if (target.hp >= target.maxHp) {
-      healer.medkits--; this.stats.heals++;
-      this.stats.medkitsUsed++;
+      this.stats.heals++;
+      target.bleeding = false;
+      target.bleedingTreated = true;
       this.addFeed(`${target.callsign || target.name}: patched up`, 'good');
       AudioSys.ui('confirm');
       target.healTarget = null;
@@ -512,9 +566,9 @@ Battle.prototype.updateObjectives = function (dt) {
       case 'hold': {
         const zone = o.zone;
         if (!zone) break;
-        const inside = this.allies.filter((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) <= (zone.w / 2) + 8).length;
+        const inside = this.allies.filter((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) <= (zone.w / 2) + 8 && Math.abs(a.y - zone.y) < 44).length;
         o.inside = inside;
-        o.contested = this.enemies.some((e) => !e.dead && Math.abs(e.x - zone.x) < zone.w / 2);
+        o.contested = this.enemies.some((e) => !e.dead && Math.abs(e.x - zone.x) < zone.w / 2 && Math.abs(e.y - zone.y) < 44);
         if (inside > 0) {
           o.progress = Math.min(o.max, o.progress + dt * (o.contested ? 0.55 : 1));
         }
@@ -524,7 +578,7 @@ Battle.prototype.updateObjectives = function (dt) {
       case 'interact': {
         const zone = o.zone;
         if (!zone) break;
-        const worker = this.allies.find((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) < 48);
+        const worker = this.allies.find((a) => !a.dead && !a.downed && Math.abs(a.x - zone.x) < 48 && Math.abs(a.y - zone.y) < 36);
         o.workerId = worker ? worker.id : null;
         if (worker) {
           o.progress = Math.min(o.max, o.progress + dt);
@@ -548,7 +602,7 @@ Battle.prototype.updateObjectives = function (dt) {
         const n = this.neutrals.find((x) => x.tag === tag);
         if (!n || n.dead) { if (n && n.dead) this.failObjective(o); break; }
         if (n.freed) { this.completeObjective(o); break; }
-        const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58);
+        const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58 && Math.abs(a.y - n.y) < 40);
         if (near) {
           o.progress = Math.min(o.max, o.progress + dt);
           if (Math.random() < dt * 5) this.particles.spawn({ x: n.x, y: n.y - 20, vx: 0, vy: -18, life: 0.6, size: 2, kind: 'spark', color: '#9fe0a8', additive: true });
@@ -565,7 +619,7 @@ Battle.prototype.updateObjectives = function (dt) {
           const n = this.neutrals.find((x) => x.tag === tag);
           if (!n || n.dead) { this.failObjective(o); allFreed = false; break; }
           if (n.freed) continue;
-          const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58);
+          const near = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - n.x) < 58 && Math.abs(a.y - n.y) < 40);
           if (near) {
             o.perTag[tag] = Math.min(o.max, (o.perTag[tag] || 0) + dt);
             if (Math.random() < dt * 4) this.particles.spawn({ x: n.x, y: n.y - 20, vx: 0, vy: -16, life: 0.5, size: 2, kind: 'spark', color: '#9fe0a8', additive: true });
@@ -598,10 +652,11 @@ Battle.prototype.updateObjectives = function (dt) {
       }
       case 'extract': {
         if (!othersDone) break;
-        const inZone = this.allies.some((a) => !a.dead && !a.downed && Math.abs(a.x - evac.x) < 95);
+        const req = this.extractRequirement();
+        o.extractReq = req;
         const escorts = this.neutrals.filter((n) => n.freed || n.following);
-        const escortsIn = escorts.every((n) => Math.abs(n.x - evac.x) < 120);
-        if (inZone && escortsIn) this.completeObjective(o);
+        const escortsIn = escorts.every((n) => Math.abs(n.x - evac.x) < 120 && Math.abs(n.y - evac.y) < 40);
+        if (req.satisfied && req.have > 0 && escortsIn) this.completeObjective(o);
         break;
       }
     }
@@ -617,6 +672,58 @@ Battle.prototype.updateObjectives = function (dt) {
       if (this.stats.alliesKilled > 0) o.failed = true;
     }
   }
+};
+
+Battle.prototype.extractRequirement = function () {
+  const evac = this.level.evac;
+  const pol = this.extractPolicy || this.mission.extractPolicy || 'all';
+  const living = this.allies.filter((a) => !a.dead);
+  const total = Math.max(1, living.length);
+  const inZone = (a) => {
+    if (a.carriedBy) {
+      const carrier = this.allies.find((c) => c.id === a.carriedBy && !c.dead);
+      return !!carrier && Math.abs(carrier.x - evac.x) < 100 && Math.abs(carrier.y - evac.y) < 40;
+    }
+    return Math.abs(a.x - evac.x) < 100 && Math.abs(a.y - evac.y) < 40;
+  };
+  const present = living.filter(inZone).length;
+  const effective = living.filter((a) => !a.downed);
+  const downed = living.filter((a) => a.downed);
+  let need = total;
+  let satisfied = present >= need;
+  let label = 'ALL SURVIVORS AT EXTRACTION';
+  let detail = `${present}/${total} personnel`;
+  if (pol === 'commander') {
+    const cmd = living.find((a) => a.role === 'commander') || living.slice().sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];
+    need = 1;
+    satisfied = !!cmd && inZone(cmd);
+    label = 'COMMANDER AT EXTRACTION';
+    detail = satisfied ? 'commander on station' : 'commander not on station';
+  } else if (pol === 'vip') {
+    const vips = this.neutrals.filter((n) => (n.freed || n.following) && !n.dead);
+    need = 1;
+    satisfied = vips.length > 0 && vips.every((n) => Math.abs(n.x - evac.x) < 120 && Math.abs(n.y - evac.y) < 40);
+    label = 'VIP AT EXTRACTION';
+    detail = satisfied ? 'VIP on station' : 'VIP not on station';
+  } else if (pol === 'casualty') {
+    need = 1;
+    satisfied = downed.some(inZone) && effective.some(inZone);
+    label = 'CASUALTY + ESCORT AT EXTRACTION';
+    detail = `${downed.filter(inZone).length} casualty in zone`;
+  } else if (/^percent:/.test(pol)) {
+    const p = clamp(parseFloat(pol.split(':')[1]) || 0.6, 0.1, 1);
+    need = Math.ceil(total * p);
+    satisfied = present >= need && effective.length > 0 && effective.some(inZone);
+    label = `EXTRACT ${Math.round(p * 100)}% OF SURVIVORS`;
+    detail = `${present}/${need} required`;
+  } else {
+    // all: every living soldier, including downed (carried in) must be at the pad
+    need = total;
+    satisfied = present >= total && effective.length > 0 && effective.some(inZone);
+    label = 'ALL SURVIVORS AT EXTRACTION';
+    detail = `${present}/${need} personnel`;
+  }
+  return { policy: pol, need, have: present, satisfied, label, detail, inZone: effective.filter(inZone).length, downed: downed.length };
 };
 
 Battle.prototype.releaseNeutral = function (n) {
