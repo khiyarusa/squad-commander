@@ -41,16 +41,27 @@ A real-time tactical military squad game: you command up to six specialised sold
 - Design decisions: see `DESIGN.md`.
 
 ## Tests
-`tests/` contains Playwright suites used during development (they reference the Playwright
-install in `../LIMINAL/node_modules`):
+`tests/` contains 15 Playwright suites with real assertions; `tests/run-all.js`
+runs every suite and exits non-zero on any failure (this is what CI runs —
+`.github/workflows/ci.yml`). Playwright resolves from `PLAYWRIGHT_MODULE`, the
+local `node_modules`, or a sibling project — never a hardcoded path.
 
 ```
-node tests/smoke.js      # boot + menu
-node tests/core.js       # campaign → battle → orders → results → hub
-node tests/mobile.js     # touch, orders, all 12 missions, persistence, rotation
-node tests/balance.js    # cautious-play campaign simulation
-node tests/ui-flows.js   # every menu/action via real clicks
-node tests/edge-cases.js # scripted spec edge cases
+npm test                 # build + every suite (CI gate)
+node tests/smoke.js        # offline boot, zero external requests
+node tests/core.js         # full campaign flow via real clicks
+node tests/navigation.js   # multi-tier graph, A*, drops/vaults, rebuilds
+node tests/commands.js     # command lifecycle, queue, cover, treat, carry
+node tests/combat.js       # weapons, projectiles, suppression, medical
+node tests/ai.js           # FOV, hearing, memory, coordination, archetypes
+node tests/extraction.js   # all five extraction policies + end gating
+node tests/save.js         # v3 checksums, backup recovery, import validation
+node tests/mobile.js       # touch, orders, all 12 missions, persistence
+node tests/edge-cases.js   # scripted spec edge cases
+node tests/v21-acceptance.js # carry state, path retries, drop edges, drag reorder
+node tests/perf.js         # frame budget + 10-minute soak
+node tests/balance.js      # cautious-play campaign simulation
+node tests/environments.js # every theme renders clean, heap budget
 ```
 
 ## Notes & limitations (honest)

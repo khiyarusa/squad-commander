@@ -301,8 +301,10 @@ function buildNavGraph(level) {
     const c = opts || {};
     const d = Math.hypot(b.x - a.x, b.y - a.y);
     const cost = d + (c.extra || 0) + Math.abs(b.y - a.y) * 0.45;
-    edges[a.i].push({ to: b.i, cost, vault: c.vault || null, vaults: c.vaults || null, drop: !!c.drop, stair: !!c.stair });
-    edges[b.i].push({ to: a.i, cost, vault: c.vault || null, vaults: c.vaults || null, drop: !!c.drop, stair: !!c.stair });
+    const edge = { to: b.i, cost, vault: c.vault || null, vaults: c.vaults || null, drop: !!c.drop, stair: !!c.stair };
+    edges[a.i].push(edge);
+    // drop edges are one-way: a walkway drop must not become an upward climb
+    if (!c.directed) edges[b.i].push({ to: a.i, cost, vault: c.vault || null, vaults: c.vaults || null, drop: false, stair: !!c.stair });
   };
 
   // mark blocked ground nodes (solid props)
@@ -391,14 +393,20 @@ function buildNavGraph(level) {
     }
   }
 
-  // drop-down edges: walkway edge to the ground below
+  // drop-down edges: walkway edge to the ground below.
+  // Match by horizontal proximity — the fall height itself is not a reason
+  // to refuse (a 118px walkway would otherwise never produce a drop).
   for (const p of level.platforms) {
     for (const q of plat[p.id]) {
       if (q.blocked) continue;
       if (q.x - p.x1 > 26 && p.x2 - q.x > 26) continue;
-      let bg = null, bd = 60;
-      for (const g of ground) { const d = Math.hypot(g.x - q.x, g.y - q.y); if (d < bd) { bd = d; bg = g; } }
-      if (bg) addEdge(q, bg, { extra: 55, drop: true });
+      let bg = null, bd = 34;
+      for (const g of ground) {
+        if (g.y <= q.y) continue; // drops only go down
+        const d = Math.abs(g.x - q.x);
+        if (d < bd && g.y - q.y < 230) { bd = d; bg = g; }
+      }
+      if (bg) addEdge(q, bg, { extra: 55, drop: true, directed: true });
     }
   }
 
@@ -620,15 +628,24 @@ function updateNavExposure(level, enemies, dt) {
   if (level.exposureT < 0.25) return;
   level.exposureT = 0;
   const live = enemies.filter((e) => !e.dead && !e.downed);
+  // nearby threats only, nearest first, weighted by proximity so a close
+  // enemy dominates a far one instead of array order deciding
+  const threats = live.map((e) => ({ e, x: e.x, y: e.y - (e.stance === 'crouch' ? 26 : 42) }));
   for (const n of level.navNodes) {
-    let visible = false;
-    let checked = 0;
-    for (const e of live) {
-      if (Math.abs(e.x - n.x) > 760) continue;
-      if (checked++ >= 3) break;
-      if (lineOfSight(level, e.x, e.y - (e.stance === 'crouch' ? 26 : 42), n.x, n.y - 20)) { visible = true; break; }
+    const near = [];
+    for (const t of threats) {
+      const dx = Math.abs(t.x - n.x);
+      if (dx < 760) near.push({ dx, t });
     }
-    const target = visible ? 1 : 0;
+    near.sort((a, b) => a.dx - b.dx);
+    let heat = 0;
+    for (const { dx, t } of near.slice(0, 4)) {
+      if (lineOfSight(level, t.x, t.y, n.x, n.y - 20)) {
+        heat = Math.max(heat, 1 - dx / 760);
+        if (heat > 0.9) break;
+      }
+    }
+    const target = heat;
     n.exposure = n.exposure == null ? target : n.exposure + (target - n.exposure) * 0.5;
   }
   // crowd pressure from allies, updated cheaply

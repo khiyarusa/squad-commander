@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: node build.js
+
+      - name: Verify the build is newer than or equal to source
+        run: |
+          if [ "$(git diff --name-only -- SQUAD_COMMANDER.html | wc -l)" -gt 0 ]; then
+            echo "::error::SQUAD_COMMANDER.html is stale — rebuild and commit the artifact"
+            git diff --stat -- SQUAD_COMMANDER.html
+            exit 1
+          fi
+
+      - name: Run all test suites (fails on any failure)
+        run: node tests/run-all.js
+
+      - name: Upload artifacts (screenshots, sheets)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: tests/artifacts/
+          if-no-files-found: ignore
+          retention-days: 7

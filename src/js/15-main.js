@@ -25,6 +25,7 @@ function boot() {
     }
   });
   window.addEventListener('keydown', onKeyDown);
+  if (UI.setFooterVersion) UI.setFooterVersion();
   App.started = true;
   requestAnimationFrame(frame);
 }

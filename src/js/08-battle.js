@@ -345,6 +345,19 @@ class Battle {
           sx = px;
         }
       }
+      // a slot inside a solid prop is not a position — nudge to free ground
+      if (inSolid(this.level, sx, fl.y)) {
+        let fixed = null;
+        // wide search: adjacent solids can form a long wall
+        for (let d = 18; d <= 180 && !fixed; d += 18) {
+          for (const off of [-d, d]) {
+            const nx = clamp(sx + off, 22, this.level.width - 22);
+            const nf = this.level.floorAt(nx, wy);
+            if (!inSolid(this.level, nx, nf.y)) { fixed = { x: nx, y: nf.y, surface: nf.id, tier: nf.tier }; break; }
+          }
+        }
+        if (fixed) { sx = fixed.x; fl = { y: fixed.y, id: fixed.surface, tier: fixed.tier }; }
+      }
       slots.push({ x: sx, y: fl.y, surface: fl.id, role: u.role, tier: fl.tier });
     }
     return slots;
@@ -533,11 +546,13 @@ class Battle {
     u.order = order;
     u.lastCommand = order;
     u.path = null; u.pathI = 0;
+    u.pathTries = 0; u.lastPathTry = 0; u.reachTries = 0; u.healStarted = false;
     u.holding = false; u.following = false;
     u.overwatch = null; u.suppressAt = null; u.focusId = null;
     u.healKitReserved = false;
     u.sprint = false;
-    u.carryId = null;
+    // carry is a persistent relationship: a new order does not drop the
+    // casualty — the carrier just moves slower until they explicitly DROP
     u.orderTime = this.time;
     u.interrupt = null;
     switch (order.type) {
@@ -807,9 +822,27 @@ class Battle {
     const step = spd * dt;
     const d = Math.hypot(dx, dy);
     const k = Math.min(1, step / Math.max(0.001, d));
+    const ox = u.x, oy = u.y;
     const nx = clamp(u.x + dx * k, 12, this.level.width - 12);
     const ny = u.y + dy * k;
     u.x = nx; u.y = ny;
+    // stall guard: pinned against a bound/obstacle with a waypoint still
+    // ahead — force-advance so support orders can fail honestly instead of
+    // idling forever (movement clamp, geometry, crowd wedges)
+    if (step > 0.001 && Math.abs(nx - ox) < 0.02 && Math.abs(ny - oy) < 0.02) {
+      u.stallT = (u.stallT || 0) + dt;
+      if (u.stallT > 0.6) {
+        u.stallT = 0;
+        u.pathI++;
+        if (u.pathI >= u.path.length) {
+          u.path = null; u.moving = false;
+          const fl = this.level.floorAt(u.x, u.y);
+          u.y = fl.y;
+          return true;
+        }
+        return false;
+      }
+    } else u.stallT = 0;
     if (Math.abs(dx) > 0.8) u.dir = Math.sign(dx);
     u.moving = true;
     u.vaulting = !!tgt.vault;
@@ -817,6 +850,25 @@ class Battle {
     u.walkPhase += Math.min(0.5, Math.abs(dx) / Math.max(10, spd) * 7);
     u.anim = (speedMul > 1.3 || u.sprint) ? 'run' : 'walk';
     if (u.stamina != null) u.stamina = clamp(u.stamina - (speedMul > 1.3 ? 9 : 2.5) * dt, 0, 100);
+    return false;
+  }
+
+  /* ---- bounded, timed path retries for support orders ---- */
+  requestSupportPath(u, order, tx, ty) {
+    const now = this.time;
+    u.pathTries = u.pathTries || 0;
+    u.lastPathTry = u.lastPathTry || 0;
+    // retry at most every 0.8 s, at most 4 attempts, then fail honestly
+    if (now - u.lastPathTry < 0.8) return false;
+    u.lastPathTry = now;
+    u.pathTries++;
+    const p = findPath(this.level, u.x, u.y, tx, ty);
+    if (p && p.length) { u.path = p; u.pathI = 0; u.pathTries = 0; return true; }
+    if (u.pathTries >= 4) {
+      this.failOrder(u, order, 'no route');
+      this.addFeed(`${u.callsign || u.name}: no route to patient`, 'warn');
+      return false;
+    }
     return false;
   }
 
@@ -851,14 +903,24 @@ class Battle {
       case 'heal': {
         const t = u.healTarget;
         if (!t || t.dead) { this.failOrder(u, o, 'patient lost'); break; }
-        if (Math.abs(t.x - u.x) > 34 || Math.abs(t.y - u.y) > 22) {
-          if (!u.path) {
-            const p = findPath(this.level, u.x, u.y, t.x + (u.x < t.x ? -24 : 24), t.y);
-            if (p) { u.path = p; u.pathI = 0; }
+        // hysteresis: once treatment starts the medic stays locked on until
+        // the patient is clearly far away — prevents treat/walk oscillation
+        const dHeal = Math.hypot(t.x - u.x, (t.y - u.y) * 1.2);
+        const healReach = u.healStarted ? 52 : 40;
+        if (dHeal > healReach) {
+          if (!u.path) this.requestSupportPath(u, o, t.x + (u.x < t.x ? -24 : 24), t.y);
+          if (u.path) {
+            const done = this.moveAlongPath(u, dt, 1.1);
+            if (done && Math.hypot(t.x - u.x, (t.y - u.y) * 1.2) > 40) {
+              // path exhausted but the patient is still out of reach
+              u.reachTries = (u.reachTries || 0) + 1;
+              u.path = null; u.lastPathTry = 0;
+              if (u.reachTries >= 3) { this.failOrder(u, o, 'cannot reach patient'); break; }
+            } else if (done) u.reachTries = 0;
           }
-          if (u.path) this.moveAlongPath(u, dt, 1.1);
         } else {
           u.moving = false;
+          u.healStarted = true;
           u.anim = 'heal';
           u.dir = t.x >= u.x ? 1 : -1;
           this.healTick(u, t, dt);
@@ -868,13 +930,18 @@ class Battle {
       case 'carry': {
         const target = this.allies.find((a) => a.id === u.carryTargetId && !a.dead);
         if (!target || !target.downed) { this.failOrder(u, o, 'casualty lost'); break; }
-        if (u.carryId === target.id) { u.moving = false; break; }
-        if (Math.abs(target.x - u.x) > 34 || Math.abs(target.y - u.y) > 24) {
-          if (!u.path) {
-            const p = findPath(this.level, u.x, u.y, target.x + (u.x < target.x ? -22 : 22), target.y);
-            if (p) { u.path = p; u.pathI = 0; }
+        if (u.carryId === target.id) { u.moving = false; this.completeOrder(u, 'already carrying'); break; }
+        const dCarry = Math.hypot(target.x - u.x, (target.y - u.y) * 1.2);
+        if (dCarry > 42) {
+          if (!u.path) this.requestSupportPath(u, o, target.x + (u.x < target.x ? -22 : 22), target.y);
+          if (u.path) {
+            const done = this.moveAlongPath(u, dt, 1.0);
+            if (done && Math.hypot(target.x - u.x, (target.y - u.y) * 1.2) > 42) {
+              u.reachTries = (u.reachTries || 0) + 1;
+              u.path = null; u.lastPathTry = 0;
+              if (u.reachTries >= 3) { this.failOrder(u, o, 'cannot reach casualty'); break; }
+            } else if (done) u.reachTries = 0;
           }
-          if (u.path) this.moveAlongPath(u, dt, 1.0);
         } else {
           u.moving = false;
           if (this.startCarry(u, target)) this.completeOrder(u, 'casualty recovered');

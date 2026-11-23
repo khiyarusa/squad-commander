@@ -407,7 +407,7 @@ input[type=range]::-moz-range-thumb{width:12px;height:16px;background:var(--acce
 .selected-strip .ss-bars{display:flex;gap:10px;margin-left:auto;align-items:center}
 .cmdq{display:flex;gap:4px;align-items:center;max-width:44vw;overflow-x:auto;scrollbar-width:none}
 .cmdq::-webkit-scrollbar{display:none}
-.cmdq-chip{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 2px 0 5px;font-size:8.5px;letter-spacing:.1em;
+.cmdq-chip{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 2px 0 5px;font-size:8.5px;letter-spacing:.1em;cursor:grab;user-select:none;touch-action:none;
   color:#d9d3c2;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);white-space:nowrap}
 .cmdq-chip b{color:var(--accent);font-weight:700}
 .cmdq-chip.is-active{border-color:rgba(227,166,63,.62);color:var(--accent)}

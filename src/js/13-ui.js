@@ -3,6 +3,7 @@
    13 — UI CORE: screens, hub, briefing, barracks, arsenal
    ============================================================ */
 const UI = {
+  setFooterVersion() { const el = document.getElementById('footer-version'); if (el) el.textContent = 'SQUAD COMMANDER v' + GAME_VERSION + ' — offline build'; },
   current: 'menu',
   backScreen: 'menu',
   battle: null,
@@ -706,7 +707,9 @@ const UI = {
     this.setRes('arsenal-resources');
     const grid = $('#arsenal-grid');
     if (!grid) return;
-    grid.innerHTML = WEAPON_ORDER.map((wid) => {
+    // the grenade launcher is an enemy weapon (demo archetype) — never sold
+    const sellable = WEAPON_ORDER.filter((wid) => wid !== 'gl');
+    grid.innerHTML = sellable.map((wid) => {
       const w = WEAPONS[wid];
       const up = d.arsenal.upgrades[wid] || {};
       return `<div class="weapon-card">
@@ -729,7 +732,7 @@ const UI = {
         <div class="result-note" style="font-size:10.5px">${w.desc}</div>
       </div>`;
     }).join('');
-    for (const wid of WEAPON_ORDER) {
+    for (const wid of sellable) {
       const cv = grid.querySelector(`[data-weapon="${wid}"]`);
       if (!cv) continue;
       const c = cv.getContext('2d');

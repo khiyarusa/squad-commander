@@ -991,13 +991,53 @@ const Art = (() => {
     else if (down) { c.scale(dir, 1); c.rotate(-1.38); c.translate(1, 3); }
     else c.scale(dir, 1);
 
+    // ---- animation state machine inputs (real simulation state) ----
+    const healing = u.anim === 'heal';
+    const carrying = !!u.carryId;
+    const reloading = u.reloadT > 0 && u.weaponCfg ? 1 - u.reloadT / Math.max(0.01, u.weaponCfg.reload) : 0; // 0..1
+    const injured = u.injury === 'serious' ? 2 : u.injury === 'light' ? 1 : 0;
+    const peeking = !!(u.coverId && u.stance === 'crouch' && (u.overwatch || u.target || u.suppressAt || u.aimReady === 0));
+
     const hipY = prone ? -7 : crouch ? -17 : -24;
     const shY = prone ? -11 : crouch ? -32 : -44;
     const headY = prone ? -12 : crouch ? -39 : -52;
-    const lean = moving && !crouch && !prone ? (u.anim === 'run' ? 4 : 2) : 0;
-    const bob = moving && !prone ? Math.abs(Math.sin(p)) * 1.2 : Math.sin(t * 1.6 + (u.id ? u.id.length : 0)) * 0.5;
+    // carry: strong forward hunch; serious injury: painful hunch; heal: crouch toward patient
+    const hunch = carrying ? 5 : injured === 2 ? 3 : 0;
+    const lean = (carrying ? 4 : 0) + (moving && !crouch && !prone ? (u.anim === 'run' ? 4 : 2) : 0) + (healing ? 3 : 0) + hunch;
+    // reload dips the muzzle through the mag-change phase; heal lowers the weapon
+    const poseDip = reloading > 0.15 && reloading < 0.85 ? 0.55 : healing ? 0.8 : 0;
+    const bob = moving && !prone ? Math.abs(Math.sin(p)) * (injured === 2 ? 0.8 : 1.2) : Math.sin(t * 1.6 + (u.id ? u.id.length : 0)) * 0.5;
     const sy = shY + bob, hy = hipY + bob;
-    const la = Math.atan2(Math.sin(aim), dir * Math.cos(aim));
+    const la = Math.atan2(Math.sin(aim + poseDip), dir * Math.cos(aim + poseDip));
+    if (peeking) c.translate(Math.cos(aim) * 3, 0); // lean out of cover toward the aim
+
+    // ---- carried: draped over the carrier's shoulder ----
+    if (u.anim === 'carried' && !dead && !down) {
+      c.save();
+      c.translate(0, -38);
+      c.rotate(-1.15); // horizontal across the shoulder
+      // legs hanging behind
+      limb(c, -4, 4, -14, 16, 6.5, pal.uniD);
+      c.fillStyle = pal.boot;
+      c.fillRect(-17, 14, 6, 5);
+      // torso + vest
+      c.fillStyle = pal.uni;
+      rr(c, -10, -8, 24, 13, 5); c.fill();
+      c.fillStyle = pal.vest;
+      rr(c, -6, -7, 16, 11, 4); c.fill();
+      // arms dangling
+      limb(c, 8, 0, 13, 12, 4, pal.uniL);
+      // head lolling back
+      c.fillStyle = skin;
+      c.beginPath(); c.arc(-14, -4, 5.4, 0, TAU); c.fill();
+      if (pal.helmet) {
+        c.fillStyle = pal.helmet;
+        c.beginPath(); c.arc(-14, -5, 6, Math.PI * 0.9, TAU); c.fill();
+      }
+      c.restore();
+      c.restore();
+      return;
+    }
 
     // ---- prone pose ----
     if (prone || dead || down) {
@@ -1048,7 +1088,7 @@ const Art = (() => {
 
     // ---- legs ----
     const stanceSpread = crouch ? 7 : 5;
-    const stride = moving ? (u.anim === 'run' ? 11 : 7) : 0;
+    const stride = moving ? (u.anim === 'run' ? 11 : 7) * (injured === 2 ? 0.72 : injured === 1 ? 0.88 : 1) : 0;
     const legA = Math.sin(p) * stride;
     const legB = Math.sin(p + Math.PI) * stride;
     const liftA = moving ? Math.max(0, Math.cos(p)) * (u.anim === 'run' ? 6 : 3.5) : 0;
@@ -1059,17 +1099,47 @@ const Art = (() => {
     drawLeg(c, 1, hy + 2, stanceSpread + legA, 0 - liftA, pal.uni, pal.boot, crouch);
 
     // ---- torso ----
+    const kick = Math.max(0, u.recoil || 0) * 1.4; // shoulder rocks back on each shot
     c.save();
-    c.translate(lean * 0.4, 0);
-    c.rotate(lean * 0.012);
-    // backpack
-    c.fillStyle = pal.vestD;
-    rr(c, -12, shY + 2, 9, 18, 3); c.fill();
-    c.fillStyle = 'rgba(0,0,0,.25)';
-    c.fillRect(-11, shY + 7, 7, 2);
-    if (u.team === 'ally') {
-      c.fillStyle = 'rgba(0,0,0,.3)';
-      c.fillRect(-10, shY + 13, 4, 5);
+    c.translate(lean * 0.4 - kick * 0.35, 0);
+    c.rotate(lean * 0.012 - kick * 0.015);
+    // backpack — role-shaped so silhouettes differ at a glance
+    if (u.role === 'medic' || u.team === 'neutral') {
+      // medic: taller medical pack with a cross panel
+      c.fillStyle = pal.vestD;
+      rr(c, -14, shY - 1, 10, 22, 3); c.fill();
+      c.fillStyle = '#ddd8c8';
+      rr(c, -13, shY + 3, 8, 9, 2); c.fill();
+      c.fillStyle = '#c2452d';
+      c.fillRect(-10.5, shY + 5.5, 3, 4); c.fillRect(-11.8, shY + 6.6, 5.6, 1.8);
+    } else if (u.role === 'support' || u.role === 'heavy') {
+      // support: ammo box slung low
+      c.fillStyle = pal.vestD;
+      rr(c, -13, shY + 6, 11, 14, 2); c.fill();
+      c.strokeStyle = '#a08a52'; c.lineWidth = 1.5;
+      c.strokeRect(-12, shY + 8, 9, 10);
+    } else if (u.role === 'sniper') {
+      // sniper: low-profile pack + rolled mat
+      c.fillStyle = pal.vestD;
+      rr(c, -12, shY + 3, 9, 16, 3); c.fill();
+      c.fillStyle = pal.uniD;
+      rr(c, -15, shY + 12, 13, 5, 2.5); c.fill();
+    } else {
+      c.fillStyle = pal.vestD;
+      rr(c, -12, shY + 2, 9, 18, 3); c.fill();
+      c.fillStyle = 'rgba(0,0,0,.25)';
+      c.fillRect(-11, shY + 7, 7, 2);
+      if (u.team === 'ally') {
+        c.fillStyle = 'rgba(0,0,0,.3)';
+        c.fillRect(-10, shY + 13, 4, 5);
+      }
+    }
+    // assault: breaching charge on the belt
+    if (u.role === 'assault') {
+      c.fillStyle = '#6d4a2c';
+      rr(c, -8, hy - 6, 7, 5, 1.5); c.fill();
+      c.fillStyle = '#c2452d';
+      c.fillRect(-5.5, hy - 4.5, 2, 2);
     }
     // torso shape
     c.fillStyle = pal.uni;
@@ -1187,6 +1257,31 @@ const Art = (() => {
     c.beginPath(); c.arc(supX, supY, 2.4, 0, TAU); c.fill();
     // weapon
     if (u.weaponCfg || u.team !== 'neutral') drawWeaponShape(c, u.weapon || 'rifle', handX, handY, la, 1, recoil);
+    // reload: spare magazine travels belt -> well during the mid phase
+    if (reloading > 0.25 && reloading < 0.8) {
+      const mt = (reloading - 0.25) / 0.55;
+      const mx0 = -6, my0 = hy - 2; // belt pouch
+      const mx = mx0 + (handX - mx0) * mt, my = my0 + (handY - my0) * mt;
+      c.fillStyle = '#3c4034';
+      rr(c, mx - 1.6, my - 3, 3.2, 6, 1); c.fill();
+      c.fillStyle = pal.glove;
+      c.beginPath(); c.arc(mx, my + 3.5, 2.2, 0, TAU); c.fill();
+    }
+    // heal: medic extends the kit toward the patient
+    if (healing) {
+      const kx = handX + aimX * 7, ky = handY + aimY * 7;
+      c.fillStyle = '#ddd8c8';
+      rr(c, kx - 4, ky - 3, 8, 6, 1.5); c.fill();
+      c.fillStyle = '#c2452d';
+      c.fillRect(kx - 1, ky - 2.2, 2, 4.4); c.fillRect(kx - 2.2, ky - 1, 4.4, 2);
+      c.fillStyle = pal.glove;
+      c.beginPath(); c.arc(kx - 5, ky, 2.2, 0, TAU); c.fill();
+    }
+    // carrier: both hands forward holding the casualty
+    if (carrying) {
+      c.fillStyle = pal.glove;
+      c.beginPath(); c.arc(9, shY - 4, 2.4, 0, TAU); c.fill();
+    }
     // front arm over weapon
     limb(c, 4, sy + 6, handX, handY, 5, pal.uniL);
     c.fillStyle = pal.glove;

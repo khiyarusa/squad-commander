@@ -62,10 +62,13 @@
   - `balance` — autopilot over four missions with stat-coherence assertions and campaign
     bookkeeping.
   - `perf` — step time inside frame budget, 10-simulated-minute soak with bounded state.
+  - `v21-acceptance` — carry state consistency, bounded path retries, directed
+    drop edges, slot validity, exposure weighting, arsenal honesty, queue drag
+    reorder, animation-state rendering, version single-source.
 - Deterministic hooks under `window.__SC` only; screenshots land in `tests/artifacts/`.
 - Release gate: all suites green, zero console errors, offline, single file, recovery verified.
 
 ## Verified status (end of overhaul)
-- 13 suites, 300+ assertions, all green; `npm test` rebuilds and runs everything.
+- 15 suites, ~395 assertions, all green; `npm test` rebuilds and runs everything; GitHub Actions runs the same gate on push.
 - Known accepted limitations: procedural art + synthesized audio only; localStorage required
   for saves; headless CI runs at low FPS (adaptive quality covers this).

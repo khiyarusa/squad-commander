@@ -63,6 +63,11 @@ Object.assign(UI, {
       }, 520);
     };
     const endPress = () => clearTimeout(this._longPressTimer);
+    // queue chips: drag starts on pointerdown (click would be too late)
+    $('#selected-strip').addEventListener('pointerdown', (e) => {
+      const chip = e.target.closest('.cmdq-chip[data-qi]');
+      if (chip && !e.target.closest('button')) { e.preventDefault(); this.beginQueueDrag(chip); }
+    });
     strip.addEventListener('pointerdown', startPress);
     strip.addEventListener('pointerup', endPress);
     strip.addEventListener('pointercancel', endPress);
@@ -88,6 +93,7 @@ Object.assign(UI, {
         if (unit && unit.carryId) { this.battle.dropCarried(unit); UI.refreshSelection(this.battle); }
         return;
       }
+
     });
     $('#pause').addEventListener('click', (e) => {
       if (e.target === $('#pause')) { if (this.battle) this.battle.setPaused(false); }
@@ -290,7 +296,7 @@ Object.assign(UI, {
       chips.push(`<span class="cmdq-chip is-active" title="${esc(u.order.reason || '')}">${u.order.type.toUpperCase()}${u.order.state === 'waiting' ? ' · PAUSED' : ''}<button data-cancel-active="1" aria-label="Cancel order">×</button></span>`);
     }
     u.queue.forEach((q, qi) => {
-      chips.push(`<span class="cmdq-chip"><b>${qi + 1}</b>${q.type.toUpperCase()}<button data-cancel-q="${qi}" aria-label="Cancel queued order">×</button></span>`);
+      chips.push(`<span class="cmdq-chip" draggable="true" data-qi="${qi}"><b>${qi + 1}</b>${q.type.toUpperCase()}<button data-cancel-q="${qi}" aria-label="Cancel queued order">×</button></span>`);
     });
     el.innerHTML = `<div class="ss-name">${esc(u.callsign || u.name)}</div>
       <div class="ss-role">${ROLES[u.role].label}${u.isCommander ? ' · CMD' : ''}</div>
@@ -303,6 +309,63 @@ Object.assign(UI, {
         <button class="btn btn--sm" data-form="1">${battle.formation.toUpperCase()}</button>
         ${u.carryId ? '<button class="btn btn--sm" data-drop="1">DROP CASUALTY</button>' : ''}
       </div>`;
+  },
+
+  /* ---- BUG-09: drag-to-reorder the command queue ---- */
+  beginQueueDrag(chip) {
+    if (this._qdrag) return;
+    const from = parseInt(chip.dataset.qi, 10);
+    if (isNaN(from)) return;
+    const bar = chip.parentElement;
+    const chips = [...bar.querySelectorAll('.cmdq-chip[data-qi]')];
+    const rect = chip.getBoundingClientRect();
+    const ghost = chip.cloneNode(true);
+    ghost.classList.add('is-dragging');
+    ghost.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;z-index:99;pointer-events:none;opacity:.9`;
+    document.body.appendChild(ghost);
+    chip.style.opacity = '0.35';
+    const move = (ev) => {
+      const x = ev.clientX ?? (ev.touches && ev.touches[0].clientX);
+      const y = ev.clientY ?? (ev.touches && ev.touches[0].clientY);
+      if (x == null) return;
+      ghost.style.left = x - rect.width / 2 + 'px';
+      ghost.style.top = y - rect.height / 2 + 'px';
+      // insertion gap under the pointer
+      let gapSet = false;
+      for (const el of chips) {
+        if (el === chip) continue;
+        const r = el.getBoundingClientRect();
+        const before = x < r.left + r.width / 2;
+        el.style.borderLeft = (!gapSet && before) ? '2px solid var(--accent)' : '';
+        if (!gapSet && before) gapSet = true;
+      }
+      if (!gapSet) chips[chips.length - 1] && (chips[chips.length - 1].style.borderRight = '2px solid var(--accent)');
+    };
+    const up = (ev) => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      ghost.remove();
+      const x = ev.clientX ?? (ev.changedTouches && ev.changedTouches[0].clientX);
+      let to = chips.length;
+      for (let i = 0; i < chips.length; i++) {
+        const el = chips[i];
+        if (el === chip) continue;
+        const r = el.getBoundingClientRect();
+        if (x <= r.left + r.width / 2) { to = i > from ? i - 1 : i; break; }
+      }
+      chips.forEach((el) => { el.style.borderLeft = ''; el.style.borderRight = ''; el.style.opacity = ''; });
+      const unit = this.battle && this.battle.selectedUnits[0];
+      if (unit && to !== from && to >= 0 && to <= unit.queue.length) {
+        const q = unit.queue.splice(from, 1)[0];
+        unit.queue.splice(Math.min(to, unit.queue.length), 0, q);
+        AudioSys.ui('tap');
+        this.refreshSelection(this.battle);
+      }
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    this._qdrag = true;
+    setTimeout(() => { this._qdrag = false; }, 100);
   },
 
   updateBattleHUD(battle, force = false) {

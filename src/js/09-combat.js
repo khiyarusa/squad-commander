@@ -424,6 +424,12 @@ Battle.prototype.killUnit = function (u, ownerId) {
   u.queue = [];
   const owner = this.units.find((o) => o.id === ownerId);
   if (owner && owner.team === 'ally') owner.kills = (owner.kills || 0) + 1;
+  // a dying carrier releases their casualty immediately (state consistency)
+  if (u.carryId) {
+    const carried = this.allies.find((a) => a.id === u.carryId);
+    if (carried) { carried.carriedBy = null; carried.carried = false; carried.x = u.x + 16; carried.y = u.y; if (!carried.downT || carried.downT <= 0) carried.downT = 20; carried.anim = 'down'; }
+    u.carryId = null; u.carryTargetId = null;
+  }
   if (u.team === 'enemy') {
     this.stats.kills++;
     this.particles.burst(u.x, u.y - 10, 5, { spread: TAU, speed: 40, life: 1.4, size: 2.6, colors: ['#5a120e', '#7d1d16'], kind: 'blood', g: 120 });
