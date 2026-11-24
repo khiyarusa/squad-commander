@@ -41,7 +41,7 @@ A real-time tactical military squad game: you command up to six specialised sold
 - Design decisions: see `DESIGN.md`.
 
 ## Tests
-`tests/` contains 19 Playwright suites with real assertions; `tests/run-all.js`
+`tests/` contains 20 Playwright suites with real assertions; `tests/run-all.js`
 runs every suite and exits non-zero on any failure (this is what CI runs —
 `.github/workflows/ci.yml`). Playwright resolves from `PLAYWRIGHT_MODULE`, the
 local `node_modules`, or a sibling project — never a hardcoded path.
@@ -63,6 +63,7 @@ node tests/v22-acceptance.js # Persian RTL, credits, reachability repair, stall 
 node tests/v23-acceptance.js # menu redesign, version source, plate cache
 node tests/v30-acceptance.js # plate-cache correctness, commander radius, toasts, art sanity
 node tests/v40-acceptance.js # menu NaN regression, toast priority, drag cancel, AI cover
+node tests/v50-acceptance.js # stealth perception, suppressed pose, Persian UI
 node tests/perf.js         # frame budget + 10-minute soak
 node tests/balance.js      # cautious-play campaign simulation
 node tests/environments.js # every theme renders clean, heap budget

@@ -137,7 +137,7 @@ const h = require('./lib/harness');
       help: document.body.innerHTML.includes('up to six orders')
     }));
     const pkg = require('../package.json');
-    h.assert(r.v === pkg.version && r.v === '4.0.0', 'version 4.0.0 synced (runtime ' + r.v + ', pkg ' + pkg.version + ')');
+    h.assert(r.v === pkg.version, 'version synced across runtime and package (' + r.v + ')');
     h.assert(r.help, 'help text states the real queue capacity (six)');
   });
 

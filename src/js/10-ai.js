@@ -612,10 +612,11 @@ Battle.prototype.enemyPerceive = function (u) {
     const inFov = angleDiff(ang, facing) < 1.02 || d < 90;
     // peripheral vision detects slowly; foveal vision detects fast
     const base = inFov ? 0.75 : 0.18;
-    const stealth = a.stance === 'prone' ? 0.45 : a.stance === 'crouch' ? 0.72 : 1;
+    const stealth = (a.stance === 'prone' ? 0.45 : a.stance === 'crouch' ? 0.72 : 1) /
+      Math.max(0.5, a.stealth != null ? a.stealth : 1);
     const score = base * (1 - d / range) * stealth;
     sawAny = true;
-    u.awareness = clamp((u.awareness || 0) + (inFov ? 0.5 : 0.14) * stealth, 0, 1);
+    u.awareness = clamp((u.awareness || 0) + (inFov ? 0.5 : 0.14) * stealth * (best === a ? 1 : 1), 0, 1);
     if (score > bestScore) { bestScore = score; best = a; }
   }
   if (!sawAny) u.awareness = clamp((u.awareness || 0) - 0.13, 0, 1);

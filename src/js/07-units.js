@@ -92,6 +92,7 @@ function createAllyFromSoldier(soldier, x, y, index, campaign) {
     weapon: soldier.weapon, weaponCfg: wcfg, speed: st.speed, acc: st.acc, react: st.react,
     armorRed: st.armorRed, soldierId: soldier.id, stats: st, formationIndex: index
   });
+  u.stealth = (ROLES[soldier.role] || ROLES.rifleman).stealth; // real perception input
   u.callsign = soldier.callsign;
   u.skills = soldier.skills || {};
   u.medkits = soldier.role === 'medic' ? 4 : 1;

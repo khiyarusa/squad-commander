@@ -541,7 +541,7 @@ Object.assign(UI, {
     const grade = !r.success ? 'F' : r.stars >= 3 ? 'S' : r.stars === 2 ? 'A' : 'B';
     const stars = r.success ? '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars) : '☆☆☆';
     const content = $('#result-content');
-    $('#result-kicker').textContent = r.success ? 'OPERATION COMPLETE' : 'OPERATION FAILED';
+    $('#result-kicker').textContent = r.success ? L10N.t('res.opComplete') : L10N.t('res.opFailed');
     $('#result-heading').textContent = m.name;
     $('#result-sub').textContent = `${REGIONS[m.region].name} · ${m.type} · ${DIFFICULTIES[Campaign.data.difficulty].label}`;
     this.setRes('result-resources');
@@ -551,8 +551,8 @@ Object.assign(UI, {
           <div class="result-grade ${r.success ? '' : 'fail'}">${grade}</div>
           <div>
             <div class="result-stars">${stars}</div>
-            <div class="result-title">${r.success ? 'Mission accomplished' : 'Mission failed'}</div>
-            <div class="result-sub">${r.success ? ('Field time ' + fmtTime(r.time) + ' · accuracy ' + r.accuracy + '%') : esc(r.reason || 'Objective not met')}</div>
+            <div class="result-title">${r.success ? L10N.t('res.accomplished') : L10N.t('res.failedDesc')}</div>
+            <div class="result-sub">${r.success ? (L10N.t('res.fieldtime') + fmtTime(r.time) + ' · accuracy ' + r.accuracy + '%') : esc(r.reason || L10N.t('res.objNotMet'))}</div>
           </div>
           <div style="margin-left:auto;text-align:right">
             <div class="result-sub">PAYMENT</div>

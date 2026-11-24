@@ -1078,16 +1078,20 @@ const Art = (() => {
     const carrying = !!u.carryId;
     const reloading = u.reloadT > 0 && u.weaponCfg ? 1 - u.reloadT / Math.max(0.01, u.weaponCfg.reload) : 0; // 0..1
     const injured = u.injury === 'serious' ? 2 : u.injury === 'light' ? 1 : 0;
+    // heavy suppression: physically cower — head down, shoulders hunched
+    const suppressed = !dead && !down && (u.suppression || 0) > 60;
+    const hitStagger = !dead && !down && (u.recentlyHit || 0) > 1.6;
     const peeking = !!(u.coverId && u.stance === 'crouch' && (u.overwatch || u.target || u.suppressAt || u.aimReady === 0));
 
     const hipY = prone ? -7 : crouch ? -17 : -24;
     const shY = prone ? -11 : crouch ? -32 : -44;
     const headY = prone ? -12 : crouch ? -39 : -52;
     // carry: strong forward hunch; serious injury: painful hunch; heal: crouch toward patient
-    const hunch = carrying ? 5 : injured === 2 ? 3 : 0;
+    const hunch = (carrying ? 5 : 0) + (injured === 2 ? 3 : 0) + (suppressed ? 4 : 0);
     const lean = (carrying ? 4 : 0) + (moving && !crouch && !prone ? (u.anim === 'run' ? 4 : 2) : 0) + (healing ? 3 : 0) + hunch;
-    // reload dips the muzzle through the mag-change phase; heal lowers the weapon
-    const poseDip = reloading > 0.15 && reloading < 0.85 ? 0.55 : healing ? 0.8 : 0;
+    // reload dips the muzzle through the mag-change phase; heal lowers the weapon;
+    // suppression tucks the weapon close to the body
+    const poseDip = reloading > 0.15 && reloading < 0.85 ? 0.55 : healing ? 0.8 : suppressed ? 0.35 : 0;
     const bob = moving && !prone ? Math.abs(Math.sin(p)) * (injured === 2 ? 0.8 : 1.2) : Math.sin(t * 1.6 + (u.id ? u.id.length : 0)) * 0.5;
     const sy = shY + bob, hy = hipY + bob;
     const la = Math.atan2(Math.sin(aim + poseDip), dir * Math.cos(aim + poseDip));
@@ -1181,10 +1185,10 @@ const Art = (() => {
     drawLeg(c, 1, hy + 2, stanceSpread + legA, 0 - liftA, pal.uni, pal.boot, crouch);
 
     // ---- torso ----
-    const kick = Math.max(0, u.recoil || 0) * 1.4; // shoulder rocks back on each shot
+    const kick = Math.max(0, u.recoil || 0) * 1.4 + (hitStagger ? 2.2 : 0); // shoulder rocks back on each shot / fresh hit
     c.save();
     c.translate(lean * 0.4 - kick * 0.35, 0);
-    c.rotate(lean * 0.012 - kick * 0.015);
+    c.rotate(lean * 0.012 - kick * 0.015 - (suppressed ? 0.05 : 0));
     // backpack — role-shaped so silhouettes differ at a glance
     if (u.role === 'medic' || u.team === 'neutral') {
       // medic: taller medical pack with a cross panel
@@ -1263,12 +1267,13 @@ const Art = (() => {
     }
 
     // ---- head ----
-    const headX = 1.5 + lean * 0.3;
+    const headX = 1.5 + lean * 0.3 - (suppressed ? 1.6 : 0);
+    const headDuck = suppressed ? 2.5 : 0;
     // neck
     c.fillStyle = skin;
     c.fillRect(headX - 2, sy + 1, 4, 5);
     // head
-    c.beginPath(); c.ellipse(headX, headY, 5.2, 5.8, 0, 0, TAU); c.fill();
+    c.beginPath(); c.ellipse(headX, headY + headDuck, 5.2, 5.8, 0, 0, TAU); c.fill();
     // jaw shadow
     c.fillStyle = 'rgba(0,0,0,.18)';
     c.beginPath(); c.ellipse(headX + 1, headY + 3, 4.4, 2.6, 0, 0, TAU); c.fill();
@@ -1276,13 +1281,13 @@ const Art = (() => {
       // helmet shell
       c.fillStyle = pal.helmet;
       c.beginPath();
-      c.arc(headX, headY - 1.5, 6.6, Math.PI * 1.02, Math.PI * 1.98);
+      c.arc(headX, headY - 1.5 + headDuck, 6.6, Math.PI * 1.02, Math.PI * 1.98);
       c.lineTo(headX + 6, headY - 1);
       c.lineTo(headX - 6.5, headY - 1);
       c.closePath(); c.fill();
       // brim
       c.fillStyle = pal.helmetD;
-      c.fillRect(headX - 6, headY - 2.5, 13, 2.2);
+      c.fillRect(headX - 6, headY - 2.5 + headDuck, 13, 2.2);
       // goggles
       c.fillStyle = '#1b1e18';
       c.fillRect(headX - 3.4, headY - 3, 8, 3.4);

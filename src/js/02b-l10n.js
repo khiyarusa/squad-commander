@@ -32,7 +32,17 @@ const L10N = {
       'credits.telegram': 'تلگرام', 'credits.rubika': 'روبیکا',
       'hub.title': 'عملیات‌ها', 'hub.sub': 'نیروی ویژه NIGHTJAR — آماده مأموریت', 'hub.secured': 'همه‌ی مناطق امن شد', 'hub.ready': 'آماده مأموریت', 'role.commander': 'فرمانده', 'role.rifleman': 'تفنگدار', 'role.assault': 'یورش‌بر',
       'role.support': 'پشتیبان', 'role.sniper': 'تیرانداز دقیق', 'role.medic': 'بهدار',
-      'role.engineer': 'مهندس رزمی'
+      'role.engineer': 'مهندس رزمی',
+      'res.opComplete': 'عملیات موفق', 'res.opFailed': 'عملیات ناموفق',
+      'res.accomplished': 'مأموریت انجام شد', 'res.failedDesc': 'مأموریت ناموفق بود',
+      'res.fieldtime': 'زمان عملیات ', 'res.objNotMet': 'اهداف کامل نشد',
+      'res.squad': 'وضعیت گروه', 'res.rewards': 'پاداش‌ها', 'res.continue': 'ادامه',
+      'bar.title': 'پادگان', 'bar.roster': 'فهرست نیروها', 'bar.status': 'وضعیت',
+      'bar.rank': 'درجه', 'bar.xp': 'تجربه', 'bar.weapon': 'سلاح', 'bar.armor': 'زره',
+      'bar.injured': 'آسیب‌دیده', 'bar.ready': 'آماده', 'bar.dead': 'از دست رفته',
+      'ars.title': 'زره‌خانه', 'ars.damage': 'آسیب', 'ars.range': 'برد',
+      'ars.magazine': 'خشاب', 'ars.rate': 'نرخ شلیک', 'ars.reload': 'خشاب‌گذاری',
+      'ars.upgrades': 'ارتقاها', 'ars.cost': 'هزینه'
     },
     en: {
       'menu.new': 'New Operation', 'menu.continue': 'Continue', 'menu.barracks': 'Barracks',
@@ -59,7 +69,17 @@ const L10N = {
       'menu.ready': 'Ready soldiers', 'menu.credits2': 'Credits', 'menu.nosave': 'No campaign yet — start a new operation',
       'hub.title': 'Operations', 'hub.sub': 'Task Force Nightjar — ready for tasking', 'hub.secured': 'all regions secured', 'hub.ready': 'ready for tasking', 'role.commander': 'Commander', 'role.rifleman': 'Rifleman', 'role.assault': 'Assault',
       'role.support': 'Support', 'role.sniper': 'Sniper', 'role.medic': 'Medic',
-      'role.engineer': 'Engineer'
+      'role.engineer': 'Engineer',
+      'res.opComplete': 'OPERATION COMPLETE', 'res.opFailed': 'OPERATION FAILED',
+      'res.accomplished': 'Mission accomplished', 'res.failedDesc': 'Mission failed',
+      'res.fieldtime': 'Field time ', 'res.objNotMet': 'Objective not met',
+      'res.squad': 'Squad status', 'res.rewards': 'Rewards', 'res.continue': 'Continue',
+      'bar.title': 'Barracks', 'bar.roster': 'Roster', 'bar.status': 'Status',
+      'bar.rank': 'Rank', 'bar.xp': 'XP', 'bar.weapon': 'Weapon', 'bar.armor': 'Armour',
+      'bar.injured': 'Injured', 'bar.ready': 'Ready', 'bar.dead': 'Lost',
+      'ars.title': 'Arsenal', 'ars.damage': 'Damage', 'ars.range': 'Range',
+      'ars.magazine': 'Magazine', 'ars.rate': 'Rate', 'ars.reload': 'Reload',
+      'ars.upgrades': 'Upgrades', 'ars.cost': 'Cost'
     }
   },
   t(key) {

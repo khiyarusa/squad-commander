@@ -532,16 +532,17 @@ const build = $('#menu-build');
       const st = s.status;
       const xpNext = xpForNext(s.xp || 0);
       const xpPct = xpNext ? clamp(((s.xp || 0) - RANKS[Campaign.ranks(s)].xp) / Math.max(1, xpNext - RANKS[Campaign.ranks(s)].xp), 0, 1) : 1;
+      const status = st === 'dead' ? L10N.t('bar.dead') : st === 'injured' ? L10N.t('bar.injured') + ' ' + s.injuryMissions : L10N.t('bar.ready');
       return `<button class="soldier-card ${st === 'dead' ? 'is-dead' : st === 'injured' ? 'is-injured' : ''}" data-profile="${s.id}">
-        <span class="corner-tag">${st === 'dead' ? 'KIA' : st === 'injured' ? 'INJURED ' + s.injuryMissions + ' OP' : 'READY'}</span>
+        <span class="corner-tag">${esc(status)}</span>
         <canvas class="portrait" data-portrait="${s.id}" width="124" height="148"></canvas>
         <div class="sc-body">
           <div class="sc-name">${esc(s.name)}</div>
-          <div class="sc-role">${ROLES[s.role].label}</div>
+          <div class="sc-role">${esc(L10N.t('role.' + s.role))}</div>
           <div class="sc-rank">${Campaign.rankName(s)} · LV ${Campaign.levelOf(s)} · ${esc(s.callsign || '')}</div>
           <div class="bar xp"><i style="width:${Math.round(xpPct * 100)}%"></i></div>
           <div class="bar hp"><i style="width:${Math.round(100 * (st === 'dead' ? 0 : s.hp) / s.maxHp)}%;background:${st === 'injured' ? 'var(--danger)' : 'var(--ok)'}"></i></div>
-          <div class="sc-foot"><span>${s.kills || 0} KILLS</span><span>${s.missions || 0} OPS</span></div>
+          <div class="sc-foot"><span>${s.kills || 0} ${L10N.t('res.squad') === 'وضعیت گروه' ? 'شکار' : 'KILLS'}</span><span>${s.missions || 0} ${L10N.t('res.squad') === 'وضعیت گروه' ? 'عملیات' : 'OPS'}</span></div>
         </div>
       </button>`;
     }).join('');
