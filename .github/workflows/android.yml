@@ -1,0 +1,119 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build the game HTML
+        run: node build.js
+
+      - name: Install Capacitor (pinned, build-only — never ships in the HTML)
+        run: npm install --no-save @capacitor/core@6.2.1 @capacitor/cli@6.2.1 @capacitor/android@6.2.1
+
+      - name: Prepare web assets
+        run: |
+          mkdir -p www
+          cp SQUAD_COMMANDER.html www/index.html
+
+      - name: Capacitor config
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "ir.amin.squadcommander",
+            "appName": "Squad Commander",
+            "webDir": "www",
+            "android": { "webContentsDebuggingEnabled": false }
+          }
+          EOF
+
+      - name: Add Android platform
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Landscape orientation (sensor-locked)
+        run: |
+          F=android/app/src/main/AndroidManifest.xml
+          grep -q sensorLandscape "$F" || sed -i 's#android:launchMode="singleTask"#android:launchMode="singleTask" android:screenOrientation="sensorLandscape"#' "$F"
+          grep -q sensorLandscape "$F"
+
+      - name: Generate signing keystore (regenerated per build)
+        run: |
+          keytool -genkeypair -v -keystore squad-commander.keystore -alias squadcommander \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass squadcommander -keypass squadcommander \
+            -dname "CN=Squad Commander, OU=Games, O=Amin, L=Tehran, C=IR"
+
+      - name: Wire signing into Gradle
+        run: |
+          cat >> android/app/build.gradle <<'EOF'
+          android {
+            signingConfigs {
+              release {
+                storeFile file("../../squad-commander.keystore")
+                storePassword "squadcommander"
+                keyAlias "squadcommander"
+                keyPassword "squadcommander"
+              }
+            }
+            buildTypes {
+              release { signingConfig signingConfigs.release }
+            }
+          }
+          EOF
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Stage versioned APK
+        run: |
+          V=$(node -p "require('./package.json').version")
+          cp android/app/build/outputs/apk/release/app-release.apk "SquadCommander-v${V}.apk"
+          echo "APK_NAME=SquadCommander-v${V}.apk" >> "$GITHUB_ENV"
+          echo "GAME_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="android-${GAME_VERSION}-build.${{ github.run_number }}"
+          gh release create "$TAG" "$APK_NAME" \
+            --title "Squad Commander Android — v${GAME_VERSION} (build ${{ github.run_number }})" \
+            --notes "Standalone Android build of SQUAD_COMMANDER.html (game v${GAME_VERSION}).
+
+          **Install:** download the APK, allow 'install unknown apps', install. Landscape-only.
+
+          **Note:** the signing key is regenerated per build, so installing a newer
+          build over an older one requires uninstalling first. Full game runs 100%
+          offline inside the app." \
+            --latest
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: "*.apk"
+          retention-days: 14
